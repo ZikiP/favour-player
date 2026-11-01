@@ -17,6 +17,7 @@ data class SpriteConfig(
 data class ResolvedStream(
     val pageUrl: String,
     val uuid: String,
+    val cdnHost: String,
     val masterUrl: String,
     val referer: String,
     val title: String,
@@ -36,10 +37,12 @@ object Resolver {
         .followRedirects(true)
         .build()
 
-    private val seekUuid =
-        Regex("""surrit\.com[^0-9a-fA-F]{0,4}([0-9a-fA-F-]{32,36})[^0-9a-fA-F]{0,4}seek""")
-    private val playlistUuid =
-        Regex("""surrit\.com[^0-9a-fA-F]{0,4}([0-9a-fA-F-]{32,36})[^0-9a-fA-F]{0,4}playlist\.m3u8""")
+    private val seekSource = Regex(
+        """([A-Za-z0-9.-]+\.[A-Za-z]{2,})[^0-9a-fA-F]{0,4}([0-9a-fA-F-]{32,36})[^0-9a-fA-F]{0,4}seek""",
+    )
+    private val playlistSource = Regex(
+        """([A-Za-z0-9.-]+\.[A-Za-z]{2,})[^0-9a-fA-F]{0,4}([0-9a-fA-F-]{32,36})[^0-9a-fA-F]{0,4}playlist\.m3u8""",
+    )
     private val titleTag = Regex("""<title>(.*?)</title>""", RegexOption.DOT_MATCHES_ALL)
 
     fun normalize(input: String): String {
@@ -55,6 +58,7 @@ object Resolver {
             return ResolvedStream(
                 pageUrl = pageUrl,
                 uuid = "",
+                cdnHost = "",
                 masterUrl = pageUrl,
                 referer = "",
                 title = pageUrl.substringAfter("://").substringBefore('/'),
@@ -76,9 +80,13 @@ object Resolver {
             val html = response.body?.string().orEmpty()
             if (html.isBlank()) throw ResolveException("页面内容为空")
 
-            val uuid = playlistUuid.find(html)?.groupValues?.get(1)
-                ?: seekUuid.find(html)?.groupValues?.get(1)
-                ?: throw ResolveException("页面上没找到视频源，站点结构可能变了")
+            val source = playlistSource.find(html) ?: seekSource.find(html)
+                ?: throw ResolveException("页面上没找到视频源，页面结构可能变了")
+            val cdnHost = source.groupValues.getOrNull(1).orEmpty()
+            val uuid = source.groupValues.getOrNull(2).orEmpty()
+            if (cdnHost.isBlank() || uuid.isBlank()) {
+                throw ResolveException("页面上没找到视频源，页面结构可能变了")
+            }
 
             val finalUrl = response.request.url
             val referer = "${finalUrl.scheme}://${finalUrl.host}/"
@@ -91,7 +99,8 @@ object Resolver {
             return ResolvedStream(
                 pageUrl = finalUrl.toString(),
                 uuid = uuid,
-                masterUrl = "https://surrit.com/$uuid/playlist.m3u8",
+                cdnHost = cdnHost,
+                masterUrl = "https://$cdnHost/$uuid/playlist.m3u8",
                 referer = referer,
                 title = title,
                 sprite = parseSprite(html),

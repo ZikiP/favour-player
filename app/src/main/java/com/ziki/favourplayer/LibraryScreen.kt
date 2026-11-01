@@ -347,7 +347,7 @@ private fun SearchField(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = horizontalPadding, vertical = 6.dp),
-        placeholder = { Text("搜索标题、番号、演员…", color = PlayerColors.Faint) },
+        placeholder = { Text("搜索标题、编号、演员…", color = PlayerColors.Faint) },
         leadingIcon = {
             Icon(Icons.Default.Search, contentDescription = null, tint = PlayerColors.Faint)
         },

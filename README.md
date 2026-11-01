@@ -18,11 +18,11 @@ App 从你自己的 favour-sync 服务拉取 `/api/items` 快照并缓存到本�
 ## 功能
 
 - 同步 + 本地缓存 + 离线展示；失败可重试。
-- 资料库：收藏 / 演员 / 最爱、搜索、卡片（封面、番号、演员、日期、最爱、播放）、详情弹窗。
+- 资料库：收藏 / 演员 / 最爱、搜索、卡片（封面、编号、演员、日期、最爱、播放）、详情弹窗。
 - 详情页或卡片播放键 → `PlayerActivity` 解析并直连播放。
 - 手动播放（收藏页或 `.m3u8` 直链）；浏览器分享文本可直接进播放器。
 - 横竖屏适配：网格按宽度自适应，详情弹窗横屏左右 / 竖屏上下，播放器控件独立适配。
-- 封面用 Coil 加载并缓存；失败回退番号色块。
+- 封面用 Coil 加载并缓存；失败回退编号色块。
 
 ## 下载 / CI
 
@@ -93,10 +93,10 @@ app/src/main/java/com/ziki/favourplayer/
 
 ## 已知限制 / 维护点
 
-- 数据源必须用 `OkHttpDataSource`；`DefaultHttpDataSource` 在真机会被 surrit CDN 返回 403。
-- 手机必须开代理/VPN 才能访问 `missav.live` / `surrit.com`；公开测试流 `demo.unified-streaming.com` 可直连。
+- 数据源必须用 `OkHttpDataSource`；`DefaultHttpDataSource` 在真机会被视频 CDN 返回 403。
+- 手机必须开代理/VPN 才能访问收藏页站点和视频 CDN；公开测试流 `demo.unified-streaming.com` 可直连。
 - 只读同步：App 不回写桌面收藏；合集 / 排序 / 多选暂未实现。
 - 离线时展示上次缓存；首次使用需要服务在线。
 - 令牌明文保存在私有 SharedPreferences。
-- 封面来自第三方 CDN；失败显示番号占位。
+- 封面来自第三方 CDN；失败显示编号占位。
 - 本项目仅用于个人调试；公开仓库不代表对内容来源的版权或 ToS 授权。

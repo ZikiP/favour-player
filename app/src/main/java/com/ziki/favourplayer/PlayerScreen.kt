@@ -196,8 +196,8 @@ fun PlayerScreen(stream: ResolvedStream, onBack: () -> Unit) {
     }
 
     val spriteConfig = stream.sprite
-    val spriteLoader = remember(stream.referer, stream.uuid) {
-        SpriteLoader(stream.referer, stream.uuid)
+    val spriteLoader = remember(stream.referer, stream.uuid, stream.cdnHost) {
+        SpriteLoader(stream.referer, stream.uuid, stream.cdnHost)
     }
     val controlsBlockPx = with(LocalDensity.current) { 190.dp.toPx() }
 

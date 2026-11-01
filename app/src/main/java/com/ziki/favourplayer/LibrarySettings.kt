@@ -296,7 +296,7 @@ fun ManualPlayDialog(
                     onValueChange = { url = it },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("地址") },
-                    placeholder = { Text("https://missav.live/...") },
+                    placeholder = { Text("https://...") },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
