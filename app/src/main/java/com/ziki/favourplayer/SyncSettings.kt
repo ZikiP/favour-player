@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -18,14 +17,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,8 +32,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -53,27 +47,19 @@ import java.util.Locale
 @Composable
 fun SyncSettingsDialog(
     state: LibraryUiState,
-    onSave: (String, String, String, Boolean, String, String) -> String?,
-    onRegenerateToken: () -> String,
-    onRefreshAddresses: () -> Unit,
+    onSave: (String, String) -> String?,
+    onTest: (String, String) -> Unit,
     onRules: () -> Unit,
     onCache: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var mode by rememberSaveable { mutableStateOf(state.mode) }
-    var port by rememberSaveable { mutableStateOf(state.port.toString()) }
-    var token by rememberSaveable { mutableStateOf(state.token) }
-    var enabled by rememberSaveable { mutableStateOf(state.enabled) }
     var pullUrl by rememberSaveable { mutableStateOf(state.pullUrl) }
     var pullToken by rememberSaveable { mutableStateOf(state.pullToken) }
-    var receiveTokenVisible by remember { mutableStateOf(false) }
     var pullTokenVisible by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val context = LocalContext.current
-    val pullMode = mode == SYNC_MODE_PULL
 
     fun save(close: Boolean) {
-        val message = onSave(mode, port, token, enabled, pullUrl, pullToken)
+        val message = onSave(pullUrl, pullToken)
         if (message == null) {
             error = null
             if (close) onDismiss()
@@ -90,7 +76,7 @@ fun SyncSettingsDialog(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
                 .widthIn(max = 560.dp)
-                .heightIn(max = 720.dp),
+                .heightIn(max = 680.dp),
             shape = RoundedCornerShape(18.dp),
             color = PlayerColors.Panel,
             border = BorderStroke(1.dp, PlayerColors.Border),
@@ -117,212 +103,104 @@ fun SyncSettingsDialog(
                     color = PlayerColors.Text,
                 )
                 Text(
-                    text = "从中间服务拉取最新收藏，或保留扩展直推模式。",
+                    text = "从中间服务拉取最新收藏；手机只需在拉取时开启 Tailscale。",
                     style = MaterialTheme.typography.bodySmall,
                     color = PlayerColors.Muted,
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = pullMode,
-                        onClick = { mode = SYNC_MODE_PULL; error = null },
-                        label = { Text("中间服务") },
-                        colors = modeChipColors(),
-                    )
-                    FilterChip(
-                        selected = !pullMode,
-                        onClick = { mode = SYNC_MODE_RECEIVE; error = null },
-                        label = { Text("直接接收") },
-                        colors = modeChipColors(),
-                    )
-                }
-
-                if (pullMode) {
-                    Text(
-                        text = "中间服务",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = PlayerColors.Text,
-                    )
-                    Text(
-                        text = "中间服务常驻在电脑或迷你主机上；手机只需在拉取时开启 Tailscale。",
-                        color = PlayerColors.Muted,
-                        fontSize = 12.5.sp,
-                    )
-                    OutlinedTextField(
-                        value = pullUrl,
-                        onValueChange = { pullUrl = it; error = null },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("服务地址") },
-                        placeholder = { Text("https://<主机>/favour") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                        colors = fieldColors(),
-                    )
-                    OutlinedTextField(
-                        value = pullToken,
-                        onValueChange = { pullToken = it; error = null },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("访问令牌") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        visualTransformation = if (pullTokenVisible) {
-                            VisualTransformation.None
-                        } else {
-                            PasswordVisualTransformation()
-                        },
-                        trailingIcon = {
-                            TextButton(onClick = { pullTokenVisible = !pullTokenVisible }) {
-                                Text(
-                                    if (pullTokenVisible) "隐藏" else "显示",
-                                    color = PlayerColors.Accent,
-                                )
-                            }
-                        },
-                        colors = fieldColors(),
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = pullStatusText(state),
-                            color = if (state.pullError != null) {
-                                PlayerColors.Danger
-                            } else {
-                                PlayerColors.Muted
-                            },
-                            fontSize = 12.5.sp,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(
-                            onClick = { save(close = false) },
-                            enabled = !state.pulling,
-                        ) {
+                Text(
+                    text = "中间服务",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = PlayerColors.Text,
+                )
+                OutlinedTextField(
+                    value = pullUrl,
+                    onValueChange = { pullUrl = it; error = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("服务地址") },
+                    placeholder = { Text("https://<主机>/favour") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    colors = fieldColors(),
+                )
+                OutlinedTextField(
+                    value = pullToken,
+                    onValueChange = { pullToken = it; error = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("访问令牌") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    visualTransformation = if (pullTokenVisible) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    trailingIcon = {
+                        TextButton(onClick = { pullTokenVisible = !pullTokenVisible }) {
                             Text(
-                                if (state.pulling) "拉取中…" else "立即拉取",
+                                if (pullTokenVisible) "隐藏" else "显示",
                                 color = PlayerColors.Accent,
                             )
                         }
-                    }
+                    },
+                    colors = fieldColors(),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
-                        text = "地址和令牌与扩展「同步设置」里填的一致；填到 /favour，不要带 /api/items。",
-                        color = PlayerColors.Faint,
-                        fontSize = 11.sp,
-                    )
-                } else {
-                    Text(
-                        text = when {
-                            state.serverError != null -> "服务异常：${state.serverError}"
-                            state.serverRunning -> "服务运行中 · 端口 ${state.port}"
-                            else -> "接收服务已停止"
+                        text = pullStatusText(state),
+                        color = if (state.pullError != null) {
+                            PlayerColors.Danger
+                        } else {
+                            PlayerColors.Muted
                         },
-                        color = if (state.serverError != null) PlayerColors.Danger else PlayerColors.Muted,
                         fontSize = 12.5.sp,
+                        modifier = Modifier.weight(1f),
                     )
-
-                    Text(
-                        text = "接收地址",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = PlayerColors.Text,
-                    )
-                    if (state.addresses.isEmpty()) {
+                    TextButton(
+                        onClick = { save(close = false) },
+                        enabled = !state.pulling,
+                    ) {
                         Text(
-                            text = "未检测到地址，请确认手机已连 Wi-Fi 或 Tailscale。",
-                            color = PlayerColors.Faint,
-                            fontSize = 12.sp,
+                            if (state.pulling) "拉取中…" else "立即拉取",
+                            color = PlayerColors.Accent,
                         )
                     }
-                    state.addresses.forEach { url ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = url,
-                                color = PlayerColors.Text,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 12.sp,
-                                modifier = Modifier.weight(1f),
-                            )
-                            TextButton(onClick = { copyToClipboard(context, url, "接收地址") }) {
-                                Text("复制", color = PlayerColors.Accent)
-                            }
-                        }
-                    }
-                    TextButton(onClick = onRefreshAddresses) {
-                        Text("刷新地址", color = PlayerColors.Accent)
-                    }
-
-                    OutlinedTextField(
-                        value = port,
-                        onValueChange = {
-                            port = it.filter(Char::isDigit).take(5)
-                            error = null
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("端口") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = fieldColors(),
-                    )
-                    OutlinedTextField(
-                        value = token,
-                        onValueChange = { token = it; error = null },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("访问令牌") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        visualTransformation = if (receiveTokenVisible) {
-                            VisualTransformation.None
-                        } else {
-                            PasswordVisualTransformation()
-                        },
-                        trailingIcon = {
-                            TextButton(onClick = { receiveTokenVisible = !receiveTokenVisible }) {
-                                Text(
-                                    if (receiveTokenVisible) "隐藏" else "显示",
-                                    color = PlayerColors.Accent,
-                                )
-                            }
-                        },
-                        colors = fieldColors(),
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = {
-                            token = onRegenerateToken()
-                            error = null
-                        }) {
-                            Text("重新生成令牌", color = PlayerColors.Danger)
-                        }
-                        Spacer(Modifier.weight(1f))
-                        TextButton(onClick = { copyToClipboard(context, token, "访问令牌") }) {
-                            Text("复制令牌", color = PlayerColors.Accent)
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text("开启接收服务", color = PlayerColors.Text, fontSize = 14.sp)
-                            Text(
-                                "关闭后扩展无法直推；服务运行时会在通知栏常驻。",
-                                color = PlayerColors.Faint,
-                                fontSize = 11.5.sp,
-                            )
-                        }
-                        Switch(checked = enabled, onCheckedChange = { enabled = it })
-                    }
-
-                    Text(
-                        text = "在 Favour 扩展 → 同步设置：地址填上面的 http://…，令牌填上面的令牌；手机和电脑需在同一 Tailscale 或局域网。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = PlayerColors.Muted,
-                    )
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = { onTest(pullUrl, pullToken) },
+                        enabled = !state.pullTesting && !state.pulling,
+                    ) {
+                        Text(
+                            if (state.pullTesting) "测试中…" else "测试连接",
+                            color = PlayerColors.Accent,
+                        )
+                    }
+                    state.pullTestMessage?.let { message ->
+                        Text(
+                            text = message,
+                            color = if (state.pullTestOk) {
+                                PlayerColors.Muted
+                            } else {
+                                PlayerColors.Danger
+                            },
+                            fontSize = 12.sp,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                Text(
+                    text = "手机不能填 127.0.0.1；请填中间服务的 Tailscale HTTPS 地址（https://主机/favour，不含 /api/items）。地址和令牌与扩展「同步设置」一致。",
+                    color = PlayerColors.Faint,
+                    fontSize = 11.sp,
+                )
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -363,12 +241,6 @@ private fun pullStatusText(state: LibraryUiState): String {
         else -> "尚未拉取"
     }
 }
-
-@Composable
-private fun modeChipColors() = FilterChipDefaults.filterChipColors(
-    selectedContainerColor = PlayerColors.Accent,
-    selectedLabelColor = PlayerColors.AccentInk,
-)
 
 private fun formatSyncTime(timestamp: Long): String =
     SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(timestamp))

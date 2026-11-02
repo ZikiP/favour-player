@@ -131,7 +131,7 @@ fun CacheSettingsDialog(onDismiss: () -> Unit) {
                 Text(
                     text = when {
                         info == null -> "读取中…"
-                        info.items == 0 -> "尚无本地收藏，等插件推送一次即可离线查看。"
+                        info.items == 0 -> "尚无本地收藏，连接中间服务拉取一次即可离线查看。"
                         else -> "${info.items} 条 · ${formatBytes(info.bytes)}" +
                             if (info.updatedAt > 0) " · 更新于 ${formatCacheTime(info.updatedAt)}" else ""
                     },

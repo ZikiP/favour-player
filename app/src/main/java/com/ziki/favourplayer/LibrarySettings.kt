@@ -1,9 +1,5 @@
 package com.ziki.favourplayer
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -128,10 +124,3 @@ internal fun fieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedPlaceholderColor = PlayerColors.Faint,
 )
 
-internal fun copyToClipboard(context: Context, text: String, label: String) {
-    runCatching {
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
-        Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
-    }
-}

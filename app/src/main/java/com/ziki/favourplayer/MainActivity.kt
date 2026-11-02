@@ -1,9 +1,6 @@
 package com.ziki.favourplayer
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -24,14 +21,6 @@ class MainActivity : ComponentActivity() {
         }
 
         libraryModel = ViewModelProvider(this)[LibraryViewModel::class.java]
-
-        if (libraryModel.state.mode != SYNC_MODE_PULL &&
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
-        }
 
         sharedUrl(intent)?.let { openPlayer(it) }
         setContent {

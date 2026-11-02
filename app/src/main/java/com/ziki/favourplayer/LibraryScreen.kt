@@ -83,7 +83,6 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
     val filtered = remember(items, query, tab, actressFilter) {
         filterItems(items, query, tab, actressFilter)
     }
-    val serverError = state.serverError
 
     BoxWithConstraints(
         modifier = Modifier
@@ -101,13 +100,6 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
                 onManual = { showManual = true },
                 onRefresh = { viewModel.pullNow() },
             )
-            if (serverError != null && state.mode != SYNC_MODE_PULL) {
-                ServerBanner(
-                    message = serverError,
-                    onSettings = { showSettings = true },
-                    horizontalPadding = horizontalPadding,
-                )
-            }
             SearchField(
                 query = query,
                 onQueryChange = { query = it },
@@ -156,7 +148,7 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
                             modifier = Modifier.weight(1f),
                             title = if (query.isBlank()) "还没有演员信息" else "没有匹配的演员",
                             message = when {
-                                items.isEmpty() -> "拉取或接收到收藏后会自动汇总。"
+                                items.isEmpty() -> "拉取到收藏后会自动汇总。"
                                 query.isBlank() -> "收藏带演员字段的作品后会自动汇总到这里。"
                                 else -> "换个关键词试试。"
                             },
@@ -201,16 +193,13 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
                 filtered.isEmpty() -> EmptyState(
                     modifier = Modifier.weight(1f),
                     title = when {
-                        items.isEmpty() && state.mode == SYNC_MODE_PULL -> "等待从中间服务拉取"
-                        items.isEmpty() -> "等待插件推送"
+                        items.isEmpty() -> "等待从中间服务拉取"
                         tab == "favorites" -> "还没有最爱的作品"
                         else -> "没有匹配的收藏"
                     },
                     message = when {
-                        items.isEmpty() && state.mode == SYNC_MODE_PULL ->
-                            "在设置里填写中间服务的地址和令牌；手机与中间服务在同一 Tailscale 网络时即可拉取。"
                         items.isEmpty() ->
-                            "在 Favour 扩展 → 同步设置里填入接收地址和令牌，或改用中间服务拉取。"
+                            "在设置里填写中间服务的地址和令牌；手机与中间服务在同一 Tailscale 网络时即可拉取。"
                         tab == "favorites" -> "在桌面端卡片上点爱心加入最爱。"
                         else -> "换个关键词或清除筛选再试试。"
                     },
@@ -265,8 +254,7 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
         SyncSettingsDialog(
             state = state,
             onSave = viewModel::saveSyncSettings,
-            onRegenerateToken = viewModel::regenerateToken,
-            onRefreshAddresses = viewModel::refreshAddresses,
+            onTest = viewModel::testPullConnection,
             onRules = {
                 showSettings = false
                 showRules = true
@@ -327,14 +315,12 @@ private fun LibraryTopBar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (state.mode == SYNC_MODE_PULL) {
-            IconButton(onClick = onRefresh, enabled = !state.pulling) {
-                Icon(
-                    Icons.Default.Refresh,
-                    contentDescription = "立即拉取",
-                    tint = if (state.pulling) PlayerColors.Faint else PlayerColors.Muted,
-                )
-            }
+        IconButton(onClick = onRefresh, enabled = !state.pulling) {
+            Icon(
+                Icons.Default.Refresh,
+                contentDescription = "立即拉取",
+                tint = if (state.pulling) PlayerColors.Faint else PlayerColors.Muted,
+            )
         }
         IconButton(onClick = onManual) {
             Icon(Icons.Default.PlayArrow, contentDescription = "手动播放", tint = PlayerColors.Muted)
@@ -507,35 +493,6 @@ private fun ListHeading(
 }
 
 @Composable
-private fun ServerBanner(
-    message: String,
-    onSettings: () -> Unit,
-    horizontalPadding: androidx.compose.ui.unit.Dp,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = horizontalPadding, vertical = 2.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(PlayerColors.Danger.copy(alpha = 0.12f))
-            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "接收服务：$message",
-            color = PlayerColors.Danger,
-            fontSize = 12.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(onClick = onSettings) {
-            Text("设置", color = PlayerColors.Danger)
-        }
-    }
-}
-
-@Composable
 private fun EmptyState(
     modifier: Modifier = Modifier,
     title: String,
@@ -581,27 +538,14 @@ private fun EmptyState(
 }
 
 private fun statusText(state: LibraryUiState): String {
-    if (state.mode == SYNC_MODE_PULL) {
-        if (state.pullUrl.isBlank() || state.pullToken.isBlank()) return "等待配置中间服务"
-        val syncedAt = state.lastReceivedAt?.takeIf { it > 0L }
-        return when {
-            state.pulling -> "正在拉取…"
-            state.pullError != null && state.snapshot != null -> "拉取失败 · 使用缓存"
-            state.pullError != null -> "拉取失败"
-            syncedAt != null -> "已同步 · ${formatSyncTime(syncedAt)}"
-            else -> "等待拉取"
-        }
-    }
+    if (state.pullUrl.isBlank() || state.pullToken.isBlank()) return "等待配置中间服务"
+    val syncedAt = state.lastReceivedAt?.takeIf { it > 0L }
     return when {
-        state.serverError != null -> "接收服务异常 · 仍可离线浏览"
-        !state.enabled && state.lastReceivedAt != null ->
-            "接收已关闭 · 离线浏览 ${formatSyncTime(state.lastReceivedAt)}"
-        !state.enabled -> "接收已关闭"
-        state.serverRunning && state.lastReceivedAt != null ->
-            "接收中 · ${formatSyncTime(state.lastReceivedAt)}"
-        state.serverRunning -> "接收中 · 端口 ${state.port}"
-        state.lastReceivedAt != null -> "未连接 · 离线浏览 ${formatSyncTime(state.lastReceivedAt)}"
-        else -> "等待插件推送"
+        state.pulling -> "正在拉取…"
+        state.pullError != null && state.snapshot != null -> "拉取失败 · 使用缓存"
+        state.pullError != null -> "拉取失败"
+        syncedAt != null -> "已同步 · ${formatSyncTime(syncedAt)}"
+        else -> "等待拉取"
     }
 }
 
