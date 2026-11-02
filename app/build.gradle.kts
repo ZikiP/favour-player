@@ -1,8 +1,21 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val versionProps = Properties().apply {
+    val file = rootProject.file("version.properties")
+    if (file.isFile) file.inputStream().use { load(it) }
+}
+val defaultVersionName = versionProps.getProperty("versionName", "0.0.1")
+val defaultVersionCode = versionProps.getProperty("versionCode", "1").toIntOrNull() ?: 1
+val appVersionName = (findProperty("versionName") as String?)?.takeIf { it.isNotBlank() }
+    ?: defaultVersionName
+val appVersionCode = (findProperty("versionCode") as String?)?.toIntOrNull()
+    ?: defaultVersionCode
 
 android {
     namespace = "com.ziki.favourplayer"
@@ -21,8 +34,8 @@ android {
         applicationId = "com.ziki.favourplayer"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
     }
 
     buildTypes {

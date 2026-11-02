@@ -38,6 +38,15 @@ App 从你自己的 favour-sync 服务拉取 `/api/items` 快照并缓存到本�
 - 它只用于调试，不可用于商店或正式发布。
 - 之前用自动 debug 签名的旧安装包需要卸载一次：`adb uninstall com.ziki.favourplayer`，之后本地和 CI 的 APK 可以互相覆盖安装。
 
+## 版本规则
+
+- 测试阶段从 `v0.0.1` 开始；正式发布用 `vX.Y.Z` tag。
+- `main` 每次推送：构建滚动调试包 `debug-latest`，versionName = `<version.properties 的 versionName>-dev.<run_number>`，versionCode = GitHub run number；release notes 会显示当前版本。
+- 本地构建：默认读 `version.properties`（当前 `versionName=0.0.1`、`versionCode=1`）。
+- 发版：修改 `version.properties` → `git tag v0.0.1` → `git push origin v0.0.1`；tag 构建会生成同名 Release。
+- CI 通过 `-PversionName` / `-PversionCode` 覆盖版本。
+- 本地包 versionCode 通常低于 CI 运行号；若设备上已有 CI 包，覆盖安装本地包需先卸载或 `adb install -r -d`。
+
 ## 首次配置
 
 - 同步服务地址：填你自己的 favour-sync 地址，例如
