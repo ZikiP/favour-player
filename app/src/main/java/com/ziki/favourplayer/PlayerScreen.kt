@@ -86,6 +86,12 @@ fun PlayerScreen(
     val subtitleStyleStore = remember { SubtitleStyleStore(context) }
     val scope = rememberCoroutineScope()
     var caption by remember { mutableStateOf<SubtitleTrack?>(null) }
+    // 控件位置可自由调，字幕避让要防止超出画面
+    val screenHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
+    val subtitleClearance = minOf(
+        154 + playerPrefs.controlBottom,
+        (screenHeightDp * 0.55f).toInt(),
+    )
     var subtitleStyle by remember { mutableStateOf(subtitleStyleStore.load()) }
     var showSubtitleSettings by remember { mutableStateOf(false) }
 
@@ -533,7 +539,7 @@ fun PlayerScreen(
                     .padding(horizontal = 24.dp)
                     .padding(
                         bottom = if (controlsVisible && !locked) {
-                            (154 + playerPrefs.controlBottom).dp
+                            subtitleClearance.dp
                         } else {
                             (26 + subtitleStyle.extraBottomDp()).dp
                         },

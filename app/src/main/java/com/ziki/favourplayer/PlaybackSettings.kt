@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -17,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 
 @Composable
 fun PlaybackSettingsPage(
@@ -58,12 +61,40 @@ fun PlaybackSettingsPage(
             selected = settings.doubleTapMs,
             onSelect = { settings = settings.copy(doubleTapMs = it) },
         )
-        ChoiceRow(
-            label = "控件距底部",
-            options = listOf(0 to "贴底", 12 to "标准", 24 to "抬高", 40 to "更高"),
-            selected = settings.controlBottom,
-            onSelect = { settings = settings.copy(controlBottom = it) },
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "控件距底部",
+                    color = PlayerColors.Text,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = if (settings.controlBottom <= 0) {
+                        "贴底"
+                    } else {
+                        "${settings.controlBottom} dp"
+                    },
+                    color = PlayerColors.Muted,
+                    fontSize = 11.sp,
+                )
+            }
+            Slider(
+                value = settings.controlBottom.toFloat(),
+                onValueChange = {
+                    settings = settings.copy(controlBottom = it.roundToInt())
+                },
+                valueRange = 0f..PlayerPrefs.CONTROL_BOTTOM_MAX.toFloat(),
+                colors = SliderDefaults.colors(
+                    thumbColor = PlayerColors.Accent,
+                    activeTrackColor = PlayerColors.Accent,
+                    inactiveTrackColor = PlayerColors.PanelSoft,
+                ),
+            )
+        }
     }
 }
 

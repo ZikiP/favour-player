@@ -530,10 +530,5 @@ private fun formatSyncTime(timestamp: Long?): String {
     return SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(timestamp))
 }
 
-private fun controlBottomLabel(value: Int): String = when (value) {
-    0 -> "贴底"
-    12 -> "标准"
-    24 -> "抬高"
-    40 -> "更高"
-    else -> "${value}dp"
-}
+private fun controlBottomLabel(value: Int): String =
+    if (value <= 0) "贴底" else "${value} dp"
