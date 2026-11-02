@@ -1,22 +1,21 @@
 package com.ziki.favourplayer
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -25,14 +24,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -43,128 +41,32 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
-const val DEFAULT_SERVER = ""
-const val SERVER_HINT = "https://<your-device>.<tailnet>.ts.net/favour"
-
 @Composable
-fun SetupScreen(
+fun ReceiveSettingsDialog(
     state: LibraryUiState,
-    onSave: (String, String) -> Unit,
-    onManualPlay: () -> Unit,
-) {
-    var server by rememberSaveable { mutableStateOf(DEFAULT_SERVER) }
-    var token by rememberSaveable { mutableStateOf("") }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(PlayerColors.Bg)
-            .windowInsetsPadding(WindowInsets.safeDrawing),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(22.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            BrandMark(56.dp)
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = "连接 Favour 同步",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = PlayerColors.Text,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = "输入服务地址和访问令牌，收藏会同步到本机并缓存。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = PlayerColors.Muted,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(24.dp))
-
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                color = PlayerColors.Panel,
-                border = BorderStroke(1.dp, PlayerColors.Border),
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    SyncFields(
-                        server = server,
-                        onServerChange = { server = it },
-                        token = token,
-                        onTokenChange = { token = it },
-                    )
-                    Button(
-                        onClick = { onSave(server, token) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
-                        enabled = server.isNotBlank() && token.isNotBlank() && !state.loading,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = PlayerColors.Accent,
-                            contentColor = PlayerColors.AccentInk,
-                            disabledContainerColor = PlayerColors.Accent.copy(alpha = 0.28f),
-                            disabledContentColor = PlayerColors.AccentInk.copy(alpha = 0.55f),
-                        ),
-                    ) {
-                        if (state.loading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = PlayerColors.AccentInk,
-                            )
-                        } else {
-                            Text("保存并同步", fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-            }
-
-            state.error?.let { message ->
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = message,
-                    color = PlayerColors.Danger,
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center,
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-            TextButton(onClick = onManualPlay) {
-                Text("先手动播放一个地址", color = PlayerColors.Accent)
-            }
-        }
-    }
-}
-
-@Composable
-fun SettingsDialog(
-    state: LibraryUiState,
-    onSave: (String, String) -> Unit,
-    onClear: () -> Unit,
+    onSave: (String, String, Boolean) -> String?,
+    onRegenerateToken: () -> String,
+    onRefreshAddresses: () -> Unit,
     onRules: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var server by rememberSaveable { mutableStateOf(state.config?.serverUrl ?: DEFAULT_SERVER) }
-    var token by rememberSaveable { mutableStateOf(state.config?.token.orEmpty()) }
+    var port by rememberSaveable { mutableStateOf(state.port.toString()) }
+    var token by rememberSaveable { mutableStateOf(state.token) }
+    var enabled by rememberSaveable { mutableStateOf(state.enabled) }
+    var tokenVisible by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -172,9 +74,9 @@ fun SettingsDialog(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .widthIn(max = 520.dp)
-                .heightIn(max = 560.dp),
+                .fillMaxWidth(0.94f)
+                .widthIn(max = 560.dp)
+                .heightIn(max = 680.dp),
             shape = RoundedCornerShape(18.dp),
             color = PlayerColors.Panel,
             border = BorderStroke(1.dp, PlayerColors.Border),
@@ -184,68 +86,157 @@ fun SettingsDialog(
                 modifier = Modifier
                     .verticalScroll(rememberScrollState())
                     .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                 ) {
                     IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "关闭",
-                            tint = PlayerColors.Faint,
-                        )
+                        Icon(Icons.Default.Close, contentDescription = "关闭", tint = PlayerColors.Faint)
                     }
                 }
+
                 Text(
-                    text = "同步设置",
+                    text = "接收同步",
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = PlayerColors.Text,
                 )
                 Text(
-                    text = "收藏数据从 Favour 同步服务读取；保存后立即同步。",
+                    text = "把收藏从 Favour 扩展直接推送到本机，不再经过电脑上的服务。",
                     style = MaterialTheme.typography.bodySmall,
                     color = PlayerColors.Muted,
                 )
-                SyncFields(
-                    server = server,
-                    onServerChange = { server = it },
-                    token = token,
-                    onTokenChange = { token = it },
+
+                Text(
+                    text = when {
+                        state.serverError != null -> "服务异常：${state.serverError}"
+                        state.serverRunning -> "服务运行中 · 端口 ${state.port}"
+                        else -> "接收服务已停止"
+                    },
+                    color = if (state.serverError != null) PlayerColors.Danger else PlayerColors.Muted,
+                    fontSize = 12.5.sp,
                 )
+
+                Text(
+                    text = "接收地址",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = PlayerColors.Text,
+                )
+                if (state.addresses.isEmpty()) {
+                    Text(
+                        text = "未检测到地址，请确认手机已连 Wi-Fi 或 Tailscale。",
+                        color = PlayerColors.Faint,
+                        fontSize = 12.sp,
+                    )
+                }
+                state.addresses.forEach { url ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = url,
+                            color = PlayerColors.Text,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { copyToClipboard(context, url, "接收地址") }) {
+                            Text("复制", color = PlayerColors.Accent)
+                        }
+                    }
+                }
+                TextButton(onClick = onRefreshAddresses) {
+                    Text("刷新地址", color = PlayerColors.Accent)
+                }
+
+                OutlinedTextField(
+                    value = port,
+                    onValueChange = { port = it.filter(Char::isDigit).take(5); error = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("端口") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = fieldColors(),
+                )
+                OutlinedTextField(
+                    value = token,
+                    onValueChange = { token = it; error = null },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("访问令牌") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    visualTransformation = if (tokenVisible) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    trailingIcon = {
+                        TextButton(onClick = { tokenVisible = !tokenVisible }) {
+                            Text(if (tokenVisible) "隐藏" else "显示", color = PlayerColors.Accent)
+                        }
+                    },
+                    colors = fieldColors(),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = {
+                        token = onRegenerateToken()
+                        error = null
+                    }) {
+                        Text("重新生成令牌", color = PlayerColors.Danger)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { copyToClipboard(context, token, "访问令牌") }) {
+                        Text("复制令牌", color = PlayerColors.Accent)
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("开启接收服务", color = PlayerColors.Text, fontSize = 14.sp)
+                        Text(
+                            "关闭后扩展无法推送；服务运行时会在通知栏常驻。",
+                            color = PlayerColors.Faint,
+                            fontSize = 11.5.sp,
+                        )
+                    }
+                    Switch(checked = enabled, onCheckedChange = { enabled = it })
+                }
+
+                Text(
+                    text = "在 Favour 扩展 → 手机同步：地址填上面的 http://…，令牌填上面的令牌；手机和电脑需在同一 Tailscale 或局域网。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PlayerColors.Muted,
+                )
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Button(
-                        onClick = { onSave(server, token) },
-                        enabled = server.isNotBlank() && token.isNotBlank() && !state.loading,
+                        onClick = {
+                            val message = onSave(port, token, enabled)
+                            if (message == null) onDismiss() else error = message
+                        },
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = PlayerColors.Accent,
                             contentColor = PlayerColors.AccentInk,
                         ),
                     ) {
-                        Text("保存并同步")
+                        Text("保存")
                     }
-                    OutlinedButton(
-                        onClick = onClear,
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, PlayerColors.Danger.copy(alpha = 0.5f)),
-                    ) {
-                        Text("清除配置", color = PlayerColors.Danger)
+                    TextButton(onClick = onRules) {
+                        Text("解析规则…", color = PlayerColors.Accent)
                     }
                 }
-                TextButton(onClick = onRules) {
-                    Text("解析规则…", color = PlayerColors.Accent)
-                }
-                state.error?.let { message ->
-                    Text(
-                        text = message,
-                        color = PlayerColors.Danger,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                error?.let { message ->
+                    Text(text = message, color = PlayerColors.Danger, fontSize = 12.sp)
                 }
             }
         }
@@ -281,11 +272,7 @@ fun ManualPlayDialog(
                     horizontalArrangement = Arrangement.End,
                 ) {
                     IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "关闭",
-                            tint = PlayerColors.Faint,
-                        )
+                        Icon(Icons.Default.Close, contentDescription = "关闭", tint = PlayerColors.Faint)
                     }
                 }
                 Text(
@@ -329,49 +316,6 @@ fun ManualPlayDialog(
 }
 
 @Composable
-private fun SyncFields(
-    server: String,
-    onServerChange: (String) -> Unit,
-    token: String,
-    onTokenChange: (String) -> Unit,
-) {
-    var tokenVisible by remember { mutableStateOf(false) }
-    val colors = fieldColors()
-
-    OutlinedTextField(
-        value = server,
-        onValueChange = onServerChange,
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text("同步服务地址") },
-        placeholder = { Text(SERVER_HINT) },
-        singleLine = true,
-        shape = RoundedCornerShape(12.dp),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-        colors = colors,
-    )
-    OutlinedTextField(
-        value = token,
-        onValueChange = onTokenChange,
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text("访问令牌") },
-        singleLine = true,
-        shape = RoundedCornerShape(12.dp),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-        visualTransformation = if (tokenVisible) {
-            VisualTransformation.None
-        } else {
-            PasswordVisualTransformation()
-        },
-        trailingIcon = {
-            TextButton(onClick = { tokenVisible = !tokenVisible }) {
-                Text(if (tokenVisible) "隐藏" else "显示", color = PlayerColors.Accent)
-            }
-        },
-        colors = colors,
-    )
-}
-
-@Composable
 private fun fieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = PlayerColors.Text,
     unfocusedTextColor = PlayerColors.Text,
@@ -385,3 +329,11 @@ private fun fieldColors() = OutlinedTextFieldDefaults.colors(
     focusedPlaceholderColor = PlayerColors.Faint,
     unfocusedPlaceholderColor = PlayerColors.Faint,
 )
+
+private fun copyToClipboard(context: Context, text: String, label: String) {
+    runCatching {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
+        Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+    }
+}

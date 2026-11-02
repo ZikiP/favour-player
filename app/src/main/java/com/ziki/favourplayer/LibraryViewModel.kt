@@ -1,24 +1,24 @@
 package com.ziki.favourplayer
 
 import android.app.Application
-import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import java.net.Inet4Address
+import java.net.NetworkInterface
 
 data class LibraryUiState(
-    val config: SyncConfig? = null,
     val snapshot: LibrarySnapshot? = null,
-    val loading: Boolean = false,
-    val error: String? = null,
-    val offline: Boolean = false,
-    val lastSyncedAt: Long? = null,
-    val needsSetup: Boolean = true,
+    val lastReceivedAt: Long? = null,
+    val port: Int = SyncStore.DEFAULT_PORT,
+    val token: String = "",
+    val enabled: Boolean = true,
+    val addresses: List<String> = emptyList(),
+    val serverRunning: Boolean = false,
+    val serverError: String? = null,
 )
 
 class LibraryViewModel(app: Application) : AndroidViewModel(app) {
@@ -30,66 +30,85 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         val config = store.loadConfig()
-        state = LibraryUiState(config = config, needsSetup = config == null)
-        viewModelScope.launch {
-            val cached = withContext(Dispatchers.IO) { store.loadCached() }
-            if (cached != null) {
-                state = state.copy(
-                    snapshot = cached,
-                    lastSyncedAt = cached.updatedAt,
-                    offline = true,
-                )
-            }
-            if (config != null) refresh()
-        }
-    }
+        val cached = store.loadCached()
+        state = LibraryUiState(
+            snapshot = cached,
+            lastReceivedAt = cached?.updatedAt,
+            port = config.port,
+            token = config.token,
+            enabled = config.enabled,
+            addresses = deviceAddresses(config.port),
+        )
 
-    fun refresh() {
-        val config = state.config ?: return
-        if (state.loading) return
-        state = state.copy(loading = true, error = null)
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching { store.refresh(config) }
-            }
-            val snapshot = result.getOrNull()
-            if (snapshot != null) {
+            SyncBus.snapshots.collect { snapshot ->
                 state = state.copy(
                     snapshot = snapshot,
-                    loading = false,
-                    offline = false,
-                    error = null,
-                    lastSyncedAt = snapshot.updatedAt,
-                    needsSetup = false,
-                )
-            } else {
-                val error = result.exceptionOrNull()
-                Log.e("FavourPlayer", "sync failed", error)
-                state = state.copy(
-                    loading = false,
-                    offline = state.snapshot != null,
-                    error = error?.message ?: "同步失败",
-                    needsSetup = false,
+                    lastReceivedAt = snapshot.updatedAt,
+                    serverError = null,
                 )
             }
         }
+        viewModelScope.launch {
+            SyncBus.server.collect { server ->
+                state = state.copy(
+                    serverRunning = server.running,
+                    serverError = server.error,
+                )
+            }
+        }
+
+        if (config.enabled) SyncService.start(app)
     }
 
-    fun saveConfig(serverUrl: String, token: String) {
-        val config = SyncConfig(serverUrl.trim(), token.trim())
-        if (config.serverUrl.isBlank() || config.token.isBlank()) return
-        store.saveConfig(config)
+    fun saveReceiveConfig(portText: String, token: String, enabled: Boolean): String? {
+        val port = portText.trim().toIntOrNull()?.takeIf { it in 1024..65535 }
+            ?: return "端口需在 1024-65535"
+        val cleanToken = token.trim()
+        if (cleanToken.isBlank()) return "令牌不能为空"
+
+        store.saveConfig(ReceiveConfig(port, cleanToken, enabled))
         state = state.copy(
-            config = config,
-            needsSetup = false,
-            error = null,
+            port = port,
+            token = cleanToken,
+            enabled = enabled,
+            addresses = deviceAddresses(port),
+            serverError = null,
         )
-        refresh()
+        if (enabled) SyncService.start(getApplication()) else SyncService.stop(getApplication())
+        return null
     }
 
-    fun clearConfig() {
-        store.clearConfig()
-        store.clearCached()
-        state = LibraryUiState(needsSetup = true)
+    fun regenerateToken(): String {
+        val token = store.regenerateToken()
+        state = state.copy(token = token)
+        if (state.enabled) SyncService.start(getApplication())
+        return token
     }
+
+    fun refreshAddresses() {
+        state = state.copy(addresses = deviceAddresses(state.port))
+    }
+
+    fun clearLocalData() {
+        store.clearSnapshot()
+        state = state.copy(snapshot = null, lastReceivedAt = null)
+    }
+
+    private fun deviceAddresses(port: Int): List<String> = runCatching {
+        val result = mutableListOf<String>()
+        val interfaces = NetworkInterface.getNetworkInterfaces() ?: return emptyList()
+        while (interfaces.hasMoreElements()) {
+            val network = interfaces.nextElement()
+            if (!network.isUp || network.isLoopback) continue
+            val addresses = network.inetAddresses
+            while (addresses.hasMoreElements()) {
+                val address = addresses.nextElement()
+                if (address is Inet4Address && !address.isLoopbackAddress && !address.isLinkLocalAddress) {
+                    result += "http://${address.hostAddress}:$port"
+                }
+            }
+        }
+        result.distinct()
+    }.getOrDefault(emptyList())
 }
