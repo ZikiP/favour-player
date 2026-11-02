@@ -87,6 +87,8 @@ dependencies {
 
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
+    // 自定义 GlShaderProgram 的运行时依赖，版本必须与其他 media3 模块一致
+    implementation("androidx.media3:media3-effect:1.5.1")
     implementation("androidx.media3:media3-datasource:1.5.1")
     implementation("androidx.media3:media3-database:1.5.1")
     implementation("androidx.media3:media3-datasource-okhttp:1.5.1")

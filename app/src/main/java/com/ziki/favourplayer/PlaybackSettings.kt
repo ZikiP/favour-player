@@ -58,6 +58,20 @@ fun PlaybackSettingsPage(
             selected = settings.doubleTapMs,
             onSelect = { settings = settings.copy(doubleTapMs = it) },
         )
+        ChoiceRow(
+            label = "帧率匹配",
+            hint = "按片源帧率切换屏幕刷新率，消除 24p 在 60Hz 上的抖动",
+            options = listOf(false to "关闭", true to "开启"),
+            selected = settings.frameRateMatch,
+            onSelect = { settings = settings.copy(frameRateMatch = it) },
+        )
+        ChoiceRow(
+            label = "画质锐化",
+            hint = "只增强亮度细节，不放大画面；片源码率低时建议关闭",
+            options = SharpenLevel.values().map { it to it.label },
+            selected = settings.sharpen,
+            onSelect = { settings = settings.copy(sharpen = it) },
+        )
     }
 }
 
@@ -67,14 +81,24 @@ private fun <T> ChoiceRow(
     options: List<Pair<T, String>>,
     selected: T,
     onSelect: (T) -> Unit,
+    hint: String? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        Text(
-            text = label,
-            color = PlayerColors.Text,
-            fontSize = 12.5.sp,
-            fontWeight = FontWeight.Medium,
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = label,
+                color = PlayerColors.Text,
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            if (hint != null) {
+                Text(
+                    text = hint,
+                    color = PlayerColors.Faint,
+                    fontSize = 10.sp,
+                )
+            }
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(7.dp),

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VerticalAlignBottom
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.VideoLibrary
@@ -162,6 +163,14 @@ fun SettingsScreen(
                     title = "双击跳转",
                     subtitle = "播放画面左右两侧",
                     value = formatSeconds(playerSettings.doubleTapMs.toInt()),
+                    onClick = { showPlayback = true },
+                )
+                RowDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.Tune,
+                    title = "画质增强",
+                    subtitle = "帧率匹配 · 锐化强度",
+                    value = qualitySummary(playerSettings),
                     onClick = { showPlayback = true },
                 )
                 RowDivider()
@@ -538,4 +547,12 @@ private fun formatSeconds(ms: Int): String {
 private fun formatSyncTime(timestamp: Long?): String {
     if (timestamp == null || timestamp <= 0L) return "未知"
     return SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(timestamp))
+}
+
+private fun qualitySummary(settings: PlayerSettings): String {
+    val parts = buildList {
+        if (settings.frameRateMatch) add("帧率匹配")
+        if (settings.sharpen.enabled) add("${settings.sharpen.label}锐化")
+    }
+    return parts.joinToString(" · ").ifBlank { "关闭" }
 }

@@ -58,6 +58,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
+import androidx.media3.common.VideoSize
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
@@ -131,7 +133,9 @@ fun PlayerScreen(
         ActivityResultContracts.OpenDocument(),
     ) { uri -> if (uri != null) applySubtitleFile(uri) }
 
-    val player = remember(stream.masterUrl) { buildPlayer(context, stream) }
+    val player = remember(stream.masterUrl) {
+        buildPlayer(context, stream, playerPrefs.sharpen)
+    }
     var resumed by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
     var isBuffering by remember { mutableStateOf(true) }
@@ -171,6 +175,31 @@ fun PlayerScreen(
         onDispose {
             saveProgress()
             player.release()
+        }
+    }
+
+    // 帧率匹配：把显示刷新率调到片源帧率的整数倍，消除 24p 在 60Hz 上的 3:2 抖动
+    DisposableEffect(player, playerPrefs.frameRateMatch) {
+        if (!playerPrefs.frameRateMatch) return@DisposableEffect onDispose { }
+        var appliedFps = 0f
+        fun apply(videoFps: Float) {
+            if (videoFps <= 1f || videoFps == appliedFps) return
+            if (applyFrameRateMatch(activity, videoFps)) appliedFps = videoFps
+        }
+        val listener = object : Player.Listener {
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                apply(player.videoFormat?.frameRate ?: -1f)
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                apply(player.videoFormat?.frameRate ?: -1f)
+            }
+        }
+        player.addListener(listener)
+        apply(player.videoFormat?.frameRate ?: -1f)
+        onDispose {
+            player.removeListener(listener)
+            restoreDefaultDisplayMode(activity)
         }
     }
 
@@ -634,7 +663,12 @@ fun PlayerScreen(
     }
 }
 
-private fun buildPlayer(context: Context, stream: ResolvedStream): ExoPlayer {
+@androidx.annotation.OptIn(UnstableApi::class)
+private fun buildPlayer(
+    context: Context,
+    stream: ResolvedStream,
+    sharpen: SharpenLevel,
+): ExoPlayer {
     val headers = buildMap {
         put("User-Agent", Resolver.DESKTOP_UA)
         if (stream.referer.isNotBlank()) put("Referer", stream.referer)
@@ -650,10 +684,43 @@ private fun buildPlayer(context: Context, stream: ResolvedStream): ExoPlayer {
     return ExoPlayer.Builder(context)
         .build()
         .apply {
+            // 特效链必须在 prepare() 之前建立，之后改只能换效果、不能新建管线
+            if (sharpen.enabled) {
+                setVideoEffects(listOf(SharpenEffect(sharpen.amount)))
+            }
             setMediaSource(mediaSource)
             prepare()
             playWhenReady = true
         }
+}
+
+/**
+ * 按片源帧率切换显示模式。找不到能整除的刷新率就保持原样，
+ * 不动比乱动强：切到不对的模式反而会增加抖动。
+ *
+ * 帧率来自轨道 Format，部分 HLS 源不写 FRAME-RATE 属性，此时拿不到就不切。
+ */
+@Suppress("DEPRECATION")
+private fun applyFrameRateMatch(activity: Activity, videoFps: Float): Boolean = runCatching {
+    val window = activity.window ?: return@runCatching false
+    val display = window.windowManager?.defaultDisplay ?: return@runCatching false
+    val currentModeId = display.mode?.modeId ?: return@runCatching false
+    val modes = display.supportedModes?.map {
+        RefreshMode(it.modeId, it.physicalWidth, it.physicalHeight, it.refreshRate)
+    }.orEmpty()
+    val target = RefreshRatePicker.pick(modes, currentModeId, videoFps) ?: return@runCatching false
+    window.attributes = window.attributes.apply { preferredDisplayModeId = target }
+    Log.i("FavourPlayer", "frame rate match: fps=$videoFps mode=$target")
+    true
+}.getOrDefault(false)
+
+@Suppress("DEPRECATION")
+private fun restoreDefaultDisplayMode(activity: Activity) {
+    runCatching {
+        val window = activity.window ?: return@runCatching
+        if (window.attributes.preferredDisplayModeId == 0) return@runCatching
+        window.attributes = window.attributes.apply { preferredDisplayModeId = 0 }
+    }
 }
 
 private fun frameAt(positionMs: Long, durationMs: Long, config: SpriteConfig): Int {

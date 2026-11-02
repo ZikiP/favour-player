@@ -8,6 +8,8 @@ data class PlayerSettings(
     val doubleTapMs: Long = 10_000L,
     val controlBottomPortrait: Int = 12,
     val controlBottomLandscape: Int = 0,
+    val sharpen: SharpenLevel = SharpenLevel.Off,
+    val frameRateMatch: Boolean = true,
 )
 
 class PlayerPrefs(context: Context) {
@@ -31,6 +33,8 @@ class PlayerPrefs(context: Context) {
             KEY_CB_LANDSCAPE,
             prefs.getInt(KEY_CONTROL_BOTTOM, 0),
         ).coerceIn(0, CONTROL_BOTTOM_MAX),
+        sharpen = SharpenLevel.fromOrdinal(prefs.getInt(KEY_SHARPEN, SharpenLevel.Off.ordinal)),
+        frameRateMatch = prefs.getBoolean(KEY_FRAME_RATE, true),
     )
 
     fun save(settings: PlayerSettings) {
@@ -46,6 +50,8 @@ class PlayerPrefs(context: Context) {
                 KEY_CB_LANDSCAPE,
                 settings.controlBottomLandscape.coerceIn(0, CONTROL_BOTTOM_MAX),
             )
+            .putInt(KEY_SHARPEN, settings.sharpen.ordinal)
+            .putBoolean(KEY_FRAME_RATE, settings.frameRateMatch)
             .apply()
     }
 
@@ -61,5 +67,7 @@ class PlayerPrefs(context: Context) {
         private const val KEY_CONTROL_BOTTOM = "control_bottom_dp"
         private const val KEY_CB_PORTRAIT = "control_bottom_portrait"
         private const val KEY_CB_LANDSCAPE = "control_bottom_landscape"
+        private const val KEY_SHARPEN = "sharpen_level"
+        private const val KEY_FRAME_RATE = "frame_rate_match"
     }
 }
