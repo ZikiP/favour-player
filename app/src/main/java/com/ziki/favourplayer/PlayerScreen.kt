@@ -338,7 +338,9 @@ fun PlayerScreen(
     val spriteLoader = remember(stream.referer, stream.spriteUrlTemplate) {
         stream.spriteUrlTemplate?.let { SpriteLoader(stream.referer, it) }
     }
-    val controlsBlockPx = with(LocalDensity.current) { 154.dp.toPx() }
+    val controlsBlockPx = with(LocalDensity.current) {
+        (156 + playerPrefs.controlBottom).dp.toPx()
+    }
     val subtitle = hostOf(stream.pageUrl)
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -531,7 +533,7 @@ fun PlayerScreen(
                     .padding(horizontal = 24.dp)
                     .padding(
                         bottom = if (controlsVisible && !locked) {
-                            152.dp
+                            (154 + playerPrefs.controlBottom).dp
                         } else {
                             (26 + subtitleStyle.extraBottomDp()).dp
                         },
@@ -557,6 +559,7 @@ fun PlayerScreen(
                     subtitleStore.clear(contentKey)
                 },
                 onOpenSubtitleSettings = { showSubtitleSettings = true },
+                controlBottom = playerPrefs.controlBottom,
                 onTogglePlay = {
                     if (player.isPlaying) player.pause() else player.play()
                     touch()

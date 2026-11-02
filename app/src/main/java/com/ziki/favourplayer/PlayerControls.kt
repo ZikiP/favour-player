@@ -64,6 +64,7 @@ fun PlayerControls(
     onPickSubtitle: () -> Unit,
     onClearSubtitle: () -> Unit,
     onOpenSubtitleSettings: () -> Unit,
+    controlBottom: Int,
     onTogglePlay: () -> Unit,
     onBack: () -> Unit,
     onOpenOriginal: () -> Unit,
@@ -118,14 +119,16 @@ fun PlayerControls(
                 }
             }
             PlayerIconButton(Icons.AutoMirrored.Rounded.OpenInNew, "打开原页", onOpenOriginal)
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(6.dp))
             SubtitleButton(
                 active = subtitleActive,
                 onPick = onPickSubtitle,
                 onClear = onClearSubtitle,
                 onOpenSettings = onOpenSubtitleSettings,
             )
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(6.dp))
+            PlayerIconButton(Icons.AutoMirrored.Rounded.RotateRight, "旋转", onRotate)
+            Spacer(Modifier.width(6.dp))
             PlayerIconButton(Icons.Rounded.Lock, "锁定", onLock)
         }
 
@@ -139,7 +142,12 @@ fun PlayerControls(
                     ),
                 )
                 .navigationBarsPadding()
-                .padding(start = 20.dp, end = 20.dp, top = 28.dp, bottom = 10.dp),
+                .padding(
+                    start = 20.dp,
+                    end = 20.dp,
+                    top = 28.dp,
+                    bottom = (10 + controlBottom).dp,
+                ),
         ) {
             PlayerSeekBar(
                 positionMs = positionMs,
@@ -171,9 +179,9 @@ fun PlayerControls(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp),
+                    .padding(top = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 PlayerIconButton(Icons.Rounded.Replay10, "后退 10 秒", onSkipBack)
                 PlayPauseButton(isPlaying = isPlaying, onClick = onTogglePlay)
@@ -185,7 +193,6 @@ fun PlayerControls(
                     selectedHeight = selectedHeight,
                     onSelected = onQualitySelected,
                 )
-                PlayerIconButton(Icons.AutoMirrored.Rounded.RotateRight, "旋转", onRotate)
             }
         }
     }
@@ -200,7 +207,7 @@ private fun PlayerIconButton(
 ) {
     Box(
         modifier = Modifier
-            .size(34.dp)
+            .size(40.dp)
             .clip(CircleShape)
             .background(Color.White.copy(alpha = 0.09f))
             .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape)
@@ -211,7 +218,7 @@ private fun PlayerIconButton(
             imageVector = icon,
             contentDescription = label,
             tint = tint,
-            modifier = Modifier.size(17.dp),
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -385,18 +392,18 @@ private fun QualityChip(
 private fun PlayerPill(text: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .height(32.dp)
-            .clip(RoundedCornerShape(9.dp))
+            .height(36.dp)
+            .clip(RoundedCornerShape(10.dp))
             .background(Color.White.copy(alpha = 0.09f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(9.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp),
+            .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
             color = Color.White,
-            fontSize = 10.5.sp,
+            fontSize = 11.5.sp,
             fontWeight = FontWeight.SemiBold,
         )
     }

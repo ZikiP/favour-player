@@ -58,6 +58,12 @@ fun PlaybackSettingsPage(
             selected = settings.doubleTapMs,
             onSelect = { settings = settings.copy(doubleTapMs = it) },
         )
+        ChoiceRow(
+            label = "控件距底部",
+            options = listOf(0 to "贴底", 12 to "标准", 24 to "抬高", 40 to "更高"),
+            selected = settings.controlBottom,
+            onSelect = { settings = settings.copy(controlBottom = it) },
+        )
     }
 }
 
