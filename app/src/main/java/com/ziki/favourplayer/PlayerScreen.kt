@@ -131,10 +131,15 @@ fun PlayerScreen(
                 }
                 Toast.makeText(context, "已加载 $name", Toast.LENGTH_SHORT).show()
             }.onFailure {
-                Log.w("FavourPlayer", "subtitle failed", it)
-                // SecurityException 之类的 message 常常为 null，退回显示类名
-                val reason = it.message?.take(60) ?: it.javaClass.simpleName
-                Toast.makeText(context, "字幕加载失败：$reason", Toast.LENGTH_LONG).show()
+                Log.e("FavourPlayer", "subtitle failed", it)
+                // 有些异常（尤其 SecurityException）message 为空，必须把类名带出来
+                val detail = it.message?.take(80)
+                val reason = if (detail.isNullOrBlank()) {
+                    it.javaClass.simpleName
+                } else {
+                    "${it.javaClass.simpleName}：$detail"
+                }
+                Toast.makeText(context, "字幕加载失败 · $reason", Toast.LENGTH_LONG).show()
             }
         }
     }
