@@ -402,6 +402,32 @@ data class SubtitleStyle(
     }
 }
 
+/** 字幕样式的 JSON 编解码，本地按作品存储和偏好同步共用。 */
+internal object SubtitleStyleCodec {
+
+    fun encode(style: SubtitleStyle): JSONObject = JSONObject()
+        .put("offset", style.offsetMs)
+        .put("size", style.fontSize.toDouble())
+        .put("color", style.textColor)
+        .put("bg", style.background)
+        .put("bold", style.bold)
+        .put("pos", style.position)
+
+    fun decode(json: JSONObject): SubtitleStyle = SubtitleStyle(
+        offsetMs = json.optLong("offset", 0L)
+            .coerceIn(-SubtitleStyle.OFFSET_LIMIT_MS, SubtitleStyle.OFFSET_LIMIT_MS),
+        fontSize = json.optDouble("size", 15.0).toFloat()
+            .coerceIn(SubtitleStyle.FONT_MIN, SubtitleStyle.FONT_MAX),
+        textColor = json.optInt("color", 0xFFFFFFFF.toInt()),
+        background = json.optInt("bg", 1).coerceIn(0, 2),
+        bold = json.optBoolean("bold", false),
+        position = json.optInt("pos", 1).coerceIn(0, 2),
+    )
+
+    fun parse(raw: String): SubtitleStyle? =
+        runCatching { decode(JSONObject(raw)) }.getOrNull()
+}
+
 class SubtitleStyleStore(context: Context) {
 
     private val prefs = context.applicationContext
@@ -423,7 +449,7 @@ class SubtitleStyleStore(context: Context) {
     fun load(key: String): SubtitleStyle {
         if (key.isBlank()) return load()
         val raw = prefs.getString(itemKey(key), null) ?: return load()
-        return decode(raw) ?: load()
+        return SubtitleStyleCodec.parse(raw) ?: load()
     }
 
     fun save(style: SubtitleStyle) {
@@ -439,7 +465,7 @@ class SubtitleStyleStore(context: Context) {
 
     fun save(key: String, style: SubtitleStyle) {
         if (key.isBlank()) return
-        prefs.edit().putString(itemKey(key), encode(style)).apply()
+        prefs.edit().putString(itemKey(key), SubtitleStyleCodec.encode(style).toString()).apply()
     }
 
     /** 清掉该作品的单独设置，回到全局默认。 */
@@ -451,32 +477,34 @@ class SubtitleStyleStore(context: Context) {
     fun hasOverride(key: String): Boolean =
         key.isNotBlank() && prefs.contains(itemKey(key))
 
-    private fun itemKey(key: String) = "item\u0000$key"
+    /** 导出全部按作品设置的样式，供偏好同步使用。 */
+    fun exportItems(limit: Int = 500): JSONObject {
+        val out = JSONObject()
+        var count = 0
+        for ((key, value) in prefs.all) {
+            if (count >= limit) break
+            if (!key.startsWith(ITEM_PREFIX)) continue
+            val raw = value as? String ?: continue
+            val style = SubtitleStyleCodec.parse(raw) ?: continue
+            out.put(key.removePrefix(ITEM_PREFIX), SubtitleStyleCodec.encode(style))
+            count += 1
+        }
+        return out
+    }
 
-    private fun encode(style: SubtitleStyle): String = JSONObject()
-        .put("offset", style.offsetMs)
-        .put("size", style.fontSize.toDouble())
-        .put("color", style.textColor)
-        .put("bg", style.background)
-        .put("bold", style.bold)
-        .put("pos", style.position)
-        .toString()
+    fun importItems(json: JSONObject) {
+        val keys = json.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val entry = json.optJSONObject(key) ?: continue
+            save(key, SubtitleStyleCodec.decode(entry))
+        }
+    }
 
-    private fun decode(raw: String): SubtitleStyle? = runCatching {
-        val json = JSONObject(raw)
-        SubtitleStyle(
-            offsetMs = json.optLong("offset", 0L)
-                .coerceIn(-SubtitleStyle.OFFSET_LIMIT_MS, SubtitleStyle.OFFSET_LIMIT_MS),
-            fontSize = json.optDouble("size", 15.0).toFloat()
-                .coerceIn(SubtitleStyle.FONT_MIN, SubtitleStyle.FONT_MAX),
-            textColor = json.optInt("color", 0xFFFFFFFF.toInt()),
-            background = json.optInt("bg", 1).coerceIn(0, 2),
-            bold = json.optBoolean("bold", false),
-            position = json.optInt("pos", 1).coerceIn(0, 2),
-        )
-    }.getOrNull()
+    private fun itemKey(key: String) = "$ITEM_PREFIX$key"
 
     private companion object {
+        const val ITEM_PREFIX = "item\u0000"
         const val KEY_OFFSET = "offset_ms"
         const val KEY_SIZE = "font_size"
         const val KEY_COLOR = "text_color"

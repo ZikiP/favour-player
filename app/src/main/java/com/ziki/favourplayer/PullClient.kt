@@ -18,7 +18,7 @@ class PullException(message: String) : Exception(message)
 
 object PullClient {
 
-    private val client = OkHttpClient.Builder()
+    internal val client = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .followRedirects(true)
@@ -116,7 +116,7 @@ object PullClient {
         }
     }
 
-    private fun normalizeBase(raw: String): String? {
+    internal fun normalizeBase(raw: String): String? {
         val value = raw.trim().trimEnd('/')
         if (value.isEmpty()) return null
         val uri = runCatching { URI(value) }.getOrNull() ?: return null

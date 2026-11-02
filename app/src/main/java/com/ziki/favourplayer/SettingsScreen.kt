@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Refresh
@@ -85,6 +86,8 @@ fun SettingsScreen(
     var showPlayback by remember { mutableStateOf(false) }
     var showControlPosition by remember { mutableStateOf(false) }
     var showSubtitleStyle by remember { mutableStateOf(false) }
+    var showProfileSync by remember { mutableStateOf(false) }
+    val profileStatus = remember(showProfileSync) { ProfileSync.status(context) }
 
     Box(
         modifier = Modifier
@@ -215,6 +218,18 @@ fun SettingsScreen(
                     subtitle = "站点解析与雪碧图",
                     onClick = { showRules = true },
                 )
+                RowDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.CloudSync,
+                    title = "偏好同步",
+                    subtitle = "按设备保存 · 重装后恢复",
+                    value = when {
+                        !profileStatus.configured -> "未配置"
+                        profileStatus.lastUploadAt > 0 -> formatSyncTime(profileStatus.lastUploadAt)
+                        else -> "未同步"
+                    },
+                    onClick = { showProfileSync = true },
+                )
             }
 
             GroupLabel("关于")
@@ -299,6 +314,8 @@ fun SettingsScreen(
                 },
                 onBack = { showSubtitleStyle = false },
             )
+        } else if (showProfileSync) {
+            ProfileSyncPage(onBack = { showProfileSync = false })
         }
     }
 }
