@@ -34,10 +34,9 @@ App 从你自己的 favour-sync 服务拉取 `/api/items` 快照并缓存到本�
 
 签名说明：
 
-- CI 用缓存中的 debug keystore 签名，跨 CI 构建保持一致。
-- 它和你本地 `assembleDebug` 的签名不同；覆盖安装前先卸载：
-  `adb uninstall com.ziki.favourplayer`，再安装下载的 APK（反向切换同理）。
-- 若 Actions 缓存被清理，CI 会生成新签名，届时卸载一次即可。
+- 仓库包含一个公开的 **debug keystore**：`keystore/favour-debug.jks`（口令 `favourdebug`），本地与 CI 共用，保证 APK 更新签名一致。
+- 它只用于调试，不可用于商店或正式发布。
+- 之前用自动 debug 签名的旧安装包需要卸载一次：`adb uninstall com.ziki.favourplayer`，之后本地和 CI 的 APK 可以互相覆盖安装。
 
 ## 首次配置
 

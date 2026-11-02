@@ -9,5 +9,6 @@ captures/
 .kotlin/
 *.jks
 *.keystore
+!keystore/favour-debug.jks
 *.apk
 *.hprof

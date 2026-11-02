@@ -8,6 +8,15 @@ android {
     namespace = "com.ziki.favourplayer"
     compileSdk = 35
 
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("keystore/favour-debug.jks")
+            storePassword = "favourdebug"
+            keyAlias = "favourdebug"
+            keyPassword = "favourdebug"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.ziki.favourplayer"
         minSdk = 26
