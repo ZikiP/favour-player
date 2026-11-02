@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -905,23 +906,30 @@ private fun ActressesContent(
         return
     }
 
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(96.dp),
-        state = gridState,
-        modifier = modifier,
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        gridItems(visible, key = { it.key }) { stat ->
-            ActressCard(
-                name = stat.name,
-                count = stat.count,
-                avatar = stat.avatar,
-                favorite = stat.favorite,
-                imageLoader = imageLoader,
-                onClick = { onActress(stat) },
-            )
+    BoxWithConstraints(modifier) {
+        // 按可用宽度算列数，卡片宽度稳定在 96-110dp；窄屏保底两列
+        val gap = 10.dp
+        val tile = 96.dp
+        val innerWidth = maxWidth - 40.dp
+        val columns = ((innerWidth + gap) / (tile + gap)).toInt().coerceAtLeast(2)
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            state = gridState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(gap),
+            verticalArrangement = Arrangement.spacedBy(gap),
+        ) {
+            gridItems(visible, key = { it.key }) { stat ->
+                ActressCard(
+                    name = stat.name,
+                    count = stat.count,
+                    avatar = stat.avatar,
+                    favorite = stat.favorite,
+                    imageLoader = imageLoader,
+                    onClick = { onActress(stat) },
+                )
+            }
         }
     }
 }
