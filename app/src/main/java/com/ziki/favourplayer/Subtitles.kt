@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.json.JSONObject
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import java.nio.charset.CodingErrorAction
@@ -63,6 +65,12 @@ object SubtitleDecoder {
         ) {
             return String(bytes, 2, bytes.size - 2, Charsets.UTF_16LE)
         }
+        if (bytes.size >= 2 &&
+            bytes[0] == 0xFE.toByte() &&
+            bytes[1] == 0xFF.toByte()
+        ) {
+            return String(bytes, 2, bytes.size - 2, Charsets.UTF_16BE)
+        }
         strictUtf8(bytes)?.let { return it }
         return String(bytes, gb)
     }
@@ -92,6 +100,15 @@ object SubtitleParser {
 
     fun parse(raw: String): List<SubtitleCue> {
         val normalized = raw.replace("\r\n", "\n").replace('\r', '\n')
+        // 番剧外挂字幕大量是 ASS/SSA，它没有「-->」，得先识别再走另一条解析路径
+        return if (isAss(normalized)) parseAss(normalized) else parseTimed(normalized)
+    }
+
+    private fun isAss(text: String): Boolean =
+        text.contains("[Events]", ignoreCase = true) ||
+            text.contains("Dialogue:", ignoreCase = true)
+
+    private fun parseTimed(normalized: String): List<SubtitleCue> {
         val cues = mutableListOf<SubtitleCue>()
         for (block in normalized.split(blankLine)) {
             val lines = block.trim().lines()
@@ -110,6 +127,73 @@ object SubtitleParser {
             cues += SubtitleCue(start, end, body)
         }
         return cues.sortedBy { it.startMs }
+    }
+
+    /**
+     * ASS/SSA：只取时间和文本，样式标签一律丢掉，按纯文本显示。
+     * 字段位置从 `Format:` 行读，不同工具导出的列顺序不一样。
+     */
+    private fun parseAss(text: String): List<SubtitleCue> {
+        val cues = mutableListOf<SubtitleCue>()
+        var startIndex = 1
+        var endIndex = 2
+        var textIndex = 9
+        var fieldCount = 10
+        var inEvents = false
+
+        for (rawLine in text.lines()) {
+            val line = rawLine.trim()
+            if (line.isEmpty()) continue
+            if (line.startsWith("[")) {
+                inEvents = line.equals("[Events]", ignoreCase = true)
+                continue
+            }
+            if (!inEvents) continue
+
+            if (line.startsWith("Format:", ignoreCase = true)) {
+                val fields = line.substringAfter(':').split(',').map { it.trim().lowercase() }
+                if (fields.isNotEmpty()) {
+                    fieldCount = fields.size
+                    fields.indexOf("start").takeIf { it >= 0 }?.let { startIndex = it }
+                    fields.indexOf("end").takeIf { it >= 0 }?.let { endIndex = it }
+                    fields.indexOf("text").takeIf { it >= 0 }?.let { textIndex = it }
+                }
+                continue
+            }
+            if (!line.startsWith("Dialogue:", ignoreCase = true)) continue
+
+            val parts = line.substringAfter(':').split(",", limit = fieldCount)
+            if (parts.size <= maxOf(startIndex, endIndex, textIndex)) continue
+            val start = parseAssTime(parts[startIndex]) ?: continue
+            val end = parseAssTime(parts[endIndex]) ?: continue
+            if (end <= start) continue
+
+            val body = cleanAss(parts[textIndex])
+            if (body.isEmpty()) continue
+            cues += SubtitleCue(start, end, body)
+        }
+        return cues.sortedBy { it.startMs }
+    }
+
+    /** `H:MM:SS.cc`，小数部分是百分之一秒。 */
+    private fun parseAssTime(value: String): Long? {
+        val parts = value.trim().split(':')
+        if (parts.size != 3) return null
+        return runCatching {
+            val seconds = parts[2].toDouble()
+            (parts[0].toLong() * 3600 + parts[1].toLong() * 60) * 1000 +
+                (seconds * 1000).toLong()
+        }.getOrNull()
+    }
+
+    private fun cleanAss(value: String): String {
+        val stripped = assTag.replace(value, "")
+            .replace("\\N", "\n")
+            .replace("\\n", "\n")
+            .replace("\\h", " ")
+        return stripped.lines()
+            .joinToString("\n") { it.trim() }
+            .trim()
     }
 
     /** 支持 `HH:MM:SS,mmm`、`MM:SS.mmm`，分隔符逗号或点。 */
@@ -168,8 +252,12 @@ class SubtitleStore(context: Context) {
 object SubtitleLoader {
 
     fun read(context: Context, uri: Uri): String {
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: error("无法读取字幕文件")
+        val bytes = try {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        } catch (error: Exception) {
+            throw IOException("打不开文件（${error.javaClass.simpleName}）", error)
+        } ?: throw IOException("没有读取权限，可能文件被移走或授权已失效")
+        if (bytes.isEmpty()) throw IOException("文件是空的")
         return SubtitleDecoder.decode(bytes)
     }
 
@@ -223,6 +311,7 @@ class SubtitleStyleStore(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences("favour_subtitle_style", Context.MODE_PRIVATE)
 
+    /** 全局默认样式，设置页改的就是它。 */
     fun load(): SubtitleStyle = SubtitleStyle(
         offsetMs = prefs.getLong(KEY_OFFSET, 0L)
             .coerceIn(-SubtitleStyle.OFFSET_LIMIT_MS, SubtitleStyle.OFFSET_LIMIT_MS),
@@ -234,6 +323,13 @@ class SubtitleStyleStore(context: Context) {
         position = prefs.getInt(KEY_POS, 1).coerceIn(0, 2),
     )
 
+    /** 某个作品单独的样式；没单独设过就沿用全局默认。 */
+    fun load(key: String): SubtitleStyle {
+        if (key.isBlank()) return load()
+        val raw = prefs.getString(itemKey(key), null) ?: return load()
+        return decode(raw) ?: load()
+    }
+
     fun save(style: SubtitleStyle) {
         prefs.edit()
             .putLong(KEY_OFFSET, style.offsetMs)
@@ -244,6 +340,45 @@ class SubtitleStyleStore(context: Context) {
             .putInt(KEY_POS, style.position)
             .apply()
     }
+
+    fun save(key: String, style: SubtitleStyle) {
+        if (key.isBlank()) return
+        prefs.edit().putString(itemKey(key), encode(style)).apply()
+    }
+
+    /** 清掉该作品的单独设置，回到全局默认。 */
+    fun clear(key: String) {
+        if (key.isBlank()) return
+        prefs.edit().remove(itemKey(key)).apply()
+    }
+
+    fun hasOverride(key: String): Boolean =
+        key.isNotBlank() && prefs.contains(itemKey(key))
+
+    private fun itemKey(key: String) = "item\u0000$key"
+
+    private fun encode(style: SubtitleStyle): String = JSONObject()
+        .put("offset", style.offsetMs)
+        .put("size", style.fontSize.toDouble())
+        .put("color", style.textColor)
+        .put("bg", style.background)
+        .put("bold", style.bold)
+        .put("pos", style.position)
+        .toString()
+
+    private fun decode(raw: String): SubtitleStyle? = runCatching {
+        val json = JSONObject(raw)
+        SubtitleStyle(
+            offsetMs = json.optLong("offset", 0L)
+                .coerceIn(-SubtitleStyle.OFFSET_LIMIT_MS, SubtitleStyle.OFFSET_LIMIT_MS),
+            fontSize = json.optDouble("size", 15.0).toFloat()
+                .coerceIn(SubtitleStyle.FONT_MIN, SubtitleStyle.FONT_MAX),
+            textColor = json.optInt("color", 0xFFFFFFFF.toInt()),
+            background = json.optInt("bg", 1).coerceIn(0, 2),
+            bold = json.optBoolean("bold", false),
+            position = json.optInt("pos", 1).coerceIn(0, 2),
+        )
+    }.getOrNull()
 
     private companion object {
         const val KEY_OFFSET = "offset_ms"

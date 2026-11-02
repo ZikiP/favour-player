@@ -185,7 +185,7 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = Icons.Rounded.Subtitles,
                     title = "字幕样式",
-                    subtitle = "字号、颜色、背景与时间偏移",
+                    subtitle = "默认值 · 作品内可单独调整",
                     value = "${subtitleStyle.fontSize.toInt()} sp",
                     onClick = { showSubtitleStyle = true },
                 )

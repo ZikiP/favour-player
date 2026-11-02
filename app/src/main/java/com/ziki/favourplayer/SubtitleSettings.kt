@@ -45,12 +45,13 @@ fun SubtitleSettingsPage(
     initial: SubtitleStyle,
     onSave: (SubtitleStyle) -> Unit,
     onBack: () -> Unit,
+    subtitle: String = "默认样式，播放器内可单独调整",
 ) {
     var style by remember { mutableStateOf(initial) }
 
     SubPage(
         title = "字幕设置",
-        subtitle = "样式全局生效，时间偏移按整片微调",
+        subtitle = subtitle,
         onBack = onBack,
         actions = {
             TextButton(onClick = { onSave(style); onBack() }) {

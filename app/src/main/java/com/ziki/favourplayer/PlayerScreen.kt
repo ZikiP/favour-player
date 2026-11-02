@@ -101,7 +101,7 @@ fun PlayerScreen(
         154 + controlBottomDp,
         (configuration.screenHeightDp * 0.55f).toInt(),
     )
-    var subtitleStyle by remember { mutableStateOf(subtitleStyleStore.load()) }
+    var subtitleStyle by remember { mutableStateOf(subtitleStyleStore.load(contentKey)) }
     var showSubtitleSettings by remember { mutableStateOf(false) }
 
     fun applySubtitleFile(uri: Uri) {
@@ -116,7 +116,11 @@ fun PlayerScreen(
             }
             result.onSuccess { track ->
                 if (track.cues.isEmpty()) {
-                    Toast.makeText(context, "没有解析到字幕内容", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        context,
+                        "没解析到字幕条目，支持 SRT / VTT / ASS",
+                        Toast.LENGTH_LONG,
+                    ).show()
                     return@onSuccess
                 }
                 caption = track
@@ -124,7 +128,8 @@ fun PlayerScreen(
                 Toast.makeText(context, "已加载 ${track.name}", Toast.LENGTH_SHORT).show()
             }.onFailure {
                 Log.w("FavourPlayer", "subtitle failed", it)
-                Toast.makeText(context, "字幕读取失败", Toast.LENGTH_SHORT).show()
+                val reason = it.message?.take(48) ?: "未知错误"
+                Toast.makeText(context, "字幕加载失败：$reason", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -650,9 +655,10 @@ fun PlayerScreen(
         if (showSubtitleSettings) {
             SubtitleSettingsPage(
                 initial = subtitleStyle,
+                subtitle = "仅对当前作品生效，下次打开自动沿用",
                 onSave = { updated ->
                     subtitleStyle = updated
-                    subtitleStyleStore.save(updated)
+                    subtitleStyleStore.save(contentKey, updated)
                 },
                 onBack = {
                     showSubtitleSettings = false
