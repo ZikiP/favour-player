@@ -25,6 +25,12 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var libraryModel: LibraryViewModel
 
+    /** 本次启动已经由启动流程负责恢复，onResume 就不要再抢一次。 */
+    private var startupRestoreHandled = false
+
+    @Volatile
+    private var restoreInFlight = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -38,6 +44,7 @@ class MainActivity : ComponentActivity() {
         // 重装后首次打开、且本地还没恢复过：先从服务端把偏好拿回来再进主界面，
         // 否则界面会先按默认值渲染一遍再跳变
         val needsRestore = ProfileSync.needsRestore(this)
+        startupRestoreHandled = needsRestore
 
         sharedUrl(intent)?.let { openPlayer(it, false) }
         setContent {
@@ -53,8 +60,12 @@ class MainActivity : ComponentActivity() {
                         CircularProgressIndicator(color = PlayerColors.Accent)
                     }
                     LaunchedEffect(Unit) {
-                        withContext(Dispatchers.IO) {
+                        val restored = withContext(Dispatchers.IO) {
                             ProfileSync.restore(applicationContext)
+                        }
+                        if (!restored) {
+                            // 没恢复成功（多半是断网），交回给 onResume 继续重试
+                            startupRestoreHandled = false
                         }
                         restoring = false
                     }
@@ -71,6 +82,27 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (::libraryModel.isInitialized) libraryModel.onForeground()
+        // 重装后第一次启动时往往还没填服务地址，恢复会被跳过。
+        // 用户补填完地址回到这里时再试一次，避免「必须重启 App 才恢复」。
+        restoreInBackground()
+    }
+
+    private fun restoreInBackground() {
+        if (startupRestoreHandled || restoreInFlight) return
+        if (!ProfileSync.needsRestore(this)) return
+        restoreInFlight = true
+        val appContext = applicationContext
+        Thread {
+            try {
+                if (ProfileSync.restore(appContext)) {
+                    runOnUiThread {
+                        if (!isFinishing && !isDestroyed) recreate()
+                    }
+                }
+            } finally {
+                restoreInFlight = false
+            }
+        }.start()
     }
 
     /**
