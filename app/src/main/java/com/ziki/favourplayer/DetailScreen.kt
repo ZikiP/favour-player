@@ -122,6 +122,23 @@ fun DetailScreen(
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            DetailIcon(
+                                icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                                label = "返回",
+                                onClick = onBack,
+                            )
+                            DetailIcon(
+                                icon = Icons.AutoMirrored.Rounded.OpenInNew,
+                                label = "打开原页",
+                                onClick = { openInBrowser(context, item.url) },
+                            )
+                        }
                     }
                     DetailHeading(item = item, meta = meta)
                     DetailActionColumn(
@@ -136,7 +153,7 @@ fun DetailScreen(
                         .weight(0.6f)
                         .fillMaxHeight()
                         .verticalScroll(rememberScrollState())
-                        .padding(start = 8.dp, end = 20.dp, top = 56.dp, bottom = 20.dp),
+                        .padding(start = 6.dp, end = 20.dp, top = 0.dp, bottom = 20.dp),
                 ) {
                     DetailSections(
                         item = item,
@@ -150,25 +167,6 @@ fun DetailScreen(
                         onOpenRelated = onOpenRelated,
                     )
                 }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                DetailIcon(
-                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
-                    label = "返回",
-                    onClick = onBack,
-                )
-                DetailIcon(
-                    icon = Icons.AutoMirrored.Rounded.OpenInNew,
-                    label = "打开原页",
-                    onClick = { openInBrowser(context, item.url) },
-                )
             }
         }
         return
@@ -571,34 +569,6 @@ private fun DetailSections(
             }
         }
 
-        SectionTitle("信息")
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(PlayerColors.Panel),
-        ) {
-            InfoLine("编号", meta.code)
-            InfoLine("发售", meta.releaseDate)
-            InfoLine("厂商", meta.publisher)
-            InfoLine("厂牌", meta.label)
-            InfoLine("导演", meta.director)
-            InfoLine("时长", meta.runtime)
-            InfoLine("来源", item.sourceName)
-            InfoLine("上次打开", formatDateTime(item.lastOpenedAt))
-            InfoLine("收藏时间", formatDate(item.createdAt))
-        }
-
-        if (meta.synopsis != null) {
-            SectionTitle("简介")
-            Text(
-                text = meta.synopsis,
-                color = PlayerColors.Muted,
-                fontSize = 12.5.sp,
-                lineHeight = 20.sp,
-            )
-        }
-
         if (meta.labels.isNotEmpty()) {
             SectionTitle("标签")
             FlowRow(
@@ -621,6 +591,16 @@ private fun DetailSections(
             }
         }
 
+        if (meta.synopsis != null) {
+            SectionTitle("简介")
+            Text(
+                text = meta.synopsis,
+                color = PlayerColors.Muted,
+                fontSize = 12.5.sp,
+                lineHeight = 20.sp,
+            )
+        }
+
         if (related.isNotEmpty()) {
             SectionTitle("相关作品")
             LazyRow(
@@ -635,6 +615,24 @@ private fun DetailSections(
                     )
                 }
             }
+        }
+
+        SectionTitle("信息")
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(PlayerColors.Panel),
+        ) {
+            InfoLine("编号", meta.code)
+            InfoLine("发售", meta.releaseDate)
+            InfoLine("厂商", meta.publisher)
+            InfoLine("厂牌", meta.label)
+            InfoLine("导演", meta.director)
+            InfoLine("时长", meta.runtime)
+            InfoLine("来源", item.sourceName)
+            InfoLine("上次打开", formatDateTime(item.lastOpenedAt))
+            InfoLine("收藏时间", formatDate(item.createdAt))
         }
     }
 }
