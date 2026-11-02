@@ -135,6 +135,8 @@ fun LibraryScreen(
     var detailId by rememberSaveable { mutableStateOf<String?>(null) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showManual by rememberSaveable { mutableStateOf(false) }
+    // "actor:<key>" 或 "series:<key>"，在当前 Tab 内打开二级页
+    var worksPage by rememberSaveable { mutableStateOf<String?>(null) }
 
     val libraryGrid = rememberLazyGridState()
     val actressGrid = rememberLazyGridState()
@@ -182,6 +184,25 @@ fun LibraryScreen(
             genreFilter = null
             onlyWithActress = false
             unwatchedOnly = false
+            worksPage = null
+        }
+    }
+
+    val worksActorKey = worksPage?.takeIf { it.startsWith("actor:") }?.removePrefix("actor:")
+    val worksSeriesKey = worksPage?.takeIf { it.startsWith("series:") }?.removePrefix("series:")
+    val worksActorStat = worksActorKey?.let { key -> actressStats.firstOrNull { it.key == key } }
+    val worksSeriesStat = worksSeriesKey?.let { key -> seriesStats.firstOrNull { it.key == key } }
+    val worksItems = remember(worksActorKey, worksSeriesKey, items) {
+        when {
+            worksActorKey != null -> items.filter { item ->
+                item.actressNames().any { it.lowercase() == worksActorKey }
+            }.sortedByDescending { it.createdAt }
+
+            worksSeriesKey != null -> items.filter { item ->
+                item.series().lowercase() == worksSeriesKey
+            }.sortedByDescending { it.createdAt }
+
+            else -> emptyList()
         }
     }
 
@@ -277,6 +298,25 @@ fun LibraryScreen(
             onOpenRelated = { detailId = it.id },
             )
         }
+
+        worksPage != null -> WorksPage(
+            title = worksActorStat?.name
+                ?: worksSeriesStat?.label
+                ?: worksActorKey
+                ?: worksSeriesKey
+                ?: "",
+            subtitle = buildString {
+                append(if (worksActorKey != null) "演员" else "系列")
+                append(" · ")
+                append(worksItems.size)
+                append(" 部作品")
+            },
+            items = worksItems,
+            imageLoader = coverLoader,
+            onBack = { worksPage = null },
+            onOpen = { detailId = it.id },
+            onPlay = { onPlay(it.url, false) },
+        )
 
         showSettings -> SettingsScreen(
             state = state,
@@ -376,15 +416,7 @@ fun LibraryScreen(
                     gridState = collectionsGrid,
                     imageLoader = coverLoader,
                     modifier = Modifier.weight(1f),
-                    onSeries = { stat ->
-                        tabName = LibraryTab.Library.name
-                        seriesFilter = stat.key
-                        actressFilter = null
-                        genreFilter = null
-                        query = ""
-                        onlyWithActress = false
-                        unwatchedOnly = false
-                    },
+                    onSeries = { stat -> worksPage = "series:${stat.key}" },
                     onClearSearch = { query = "" },
                     onSyncSettings = { showSettings = true },
                 )
@@ -395,15 +427,7 @@ fun LibraryScreen(
                     gridState = actressGrid,
                     imageLoader = coverLoader,
                     modifier = Modifier.weight(1f),
-                    onActress = { stat ->
-                        tabName = LibraryTab.Library.name
-                        actressFilter = stat.key
-                        seriesFilter = null
-                        genreFilter = null
-                        query = ""
-                        onlyWithActress = false
-                        unwatchedOnly = false
-                    },
+                    onActress = { stat -> worksPage = "actor:${stat.key}" },
                     onClearSearch = { query = "" },
                     onSyncSettings = { showSettings = true },
                 )

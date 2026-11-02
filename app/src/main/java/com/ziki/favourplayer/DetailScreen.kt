@@ -8,22 +8,26 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -38,7 +42,6 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,8 +52,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,23 +75,104 @@ fun DetailScreen(
     related: List<LibraryItem>,
     onOpenRelated: (LibraryItem) -> Unit,
 ) {
-    val context = LocalContext.current
-    val code = item.extra("code")?.value.orEmpty()
-    val actress = item.extra("actress")?.value.orEmpty()
-    val releaseDate = item.extra("releaseDate")?.value.orEmpty()
-    val publisher = item.extra("publisher")?.value.orEmpty()
-    val director = item.extra("director")?.value.orEmpty()
-    val label = item.extra("label")?.value.orEmpty()
-    val runtime = item.runtime()
-    val series = item.series()
-    val labels = item.displayLabels()
-    val synopsis = listOf("description", "summary", "plot")
-        .firstNotNullOfOrNull { key -> item.extra(key)?.value?.takeIf { it.isNotBlank() } }
-    val metaLine = listOf(releaseDate, publisher)
-        .filter { it.isNotBlank() }
-        .joinToString(" · ")
-        .ifBlank { hostOf(item.url) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val meta = rememberDetailMeta(item)
     val resume = progress?.takeIf { it.resumable }
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val landscape = configuration.screenWidthDp > configuration.screenHeightDp
+
+    if (landscape) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(PlayerColors.Bg),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .weight(0.4f)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1.5f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(PlayerColors.PanelSoft),
+                    ) {
+                        if (item.cover.isNotBlank()) {
+                            AsyncImage(
+                                model = item.cover,
+                                imageLoader = imageLoader,
+                                contentDescription = null,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else {
+                            CoverFallback(
+                                label = "",
+                                seed = item.url,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+                    DetailHeading(item = item, meta = meta)
+                    DetailActionColumn(
+                        resume = resume,
+                        onPlay = onPlay,
+                        onOpen = { openInBrowser(context, item.url) },
+                    )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .weight(0.6f)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 8.dp, end = 20.dp, top = 56.dp, bottom = 20.dp),
+                ) {
+                    DetailSections(
+                        item = item,
+                        meta = meta,
+                        avatars = avatars,
+                        imageLoader = imageLoader,
+                        onActorClick = onActorClick,
+                        onSeriesClick = onSeriesClick,
+                        onTagClick = onTagClick,
+                        related = related,
+                        onOpenRelated = onOpenRelated,
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                DetailIcon(
+                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                    label = "返回",
+                    onClick = onBack,
+                )
+                DetailIcon(
+                    icon = Icons.AutoMirrored.Rounded.OpenInNew,
+                    label = "打开原页",
+                    onClick = { openInBrowser(context, item.url) },
+                )
+            }
+        }
+        return
+    }
 
     Box(
         modifier = Modifier
@@ -112,7 +194,7 @@ fun DetailScreen(
                         model = item.cover,
                         imageLoader = imageLoader,
                         contentDescription = null,
-                        contentScale = ContentScale.Crop,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
                             .alpha(0.62f),
@@ -141,7 +223,7 @@ fun DetailScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .statusBarsPadding()
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
@@ -176,7 +258,7 @@ fun DetailScreen(
                                 model = item.cover,
                                 imageLoader = imageLoader,
                                 contentDescription = null,
-                                contentScale = ContentScale.Crop,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         } else {
@@ -188,79 +270,7 @@ fun DetailScreen(
                         }
                     }
                     Column(Modifier.weight(1f)) {
-                        if (code.isNotBlank()) {
-                            Text(
-                                text = code,
-                                color = PlayerColors.Accent,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 9.5.sp,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(5.dp))
-                                    .background(PlayerColors.AccentSoft)
-                                    .padding(horizontal = 6.dp, vertical = 3.dp),
-                            )
-                        }
-                        Text(
-                            text = item.title.ifBlank { hostOf(item.url).ifBlank { item.url } },
-                            color = PlayerColors.Text,
-                            fontSize = 21.sp,
-                            lineHeight = 26.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 6.dp),
-                        )
-                        Text(
-                            text = metaLine,
-                            color = PlayerColors.Muted,
-                            fontSize = 10.5.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 5.dp),
-                        )
-                        if (item.favorite || item.watched) {
-                            Row(
-                                modifier = Modifier.padding(top = 6.dp),
-                                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                            ) {
-                                if (item.favorite) {
-                                    Row(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(999.dp))
-                                            .background(PlayerColors.AccentSoft)
-                                            .padding(horizontal = 8.dp, vertical = 3.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Favorite,
-                                            contentDescription = null,
-                                            tint = PlayerColors.Fav,
-                                            modifier = Modifier.size(11.dp),
-                                        )
-                                        Text(
-                                            text = "已收藏",
-                                            color = PlayerColors.Fav,
-                                            fontSize = 9.5.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                        )
-                                    }
-                                }
-                                if (item.watched) {
-                                    Text(
-                                        text = "已看",
-                                        color = PlayerColors.Muted,
-                                        fontSize = 9.5.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(999.dp))
-                                            .background(PlayerColors.PanelSoft)
-                                            .padding(horizontal = 8.dp, vertical = 3.dp),
-                                    )
-                                }
-                            }
-                        }
+                        DetailHeading(item = item, meta = meta)
                     }
                 }
             }
@@ -270,201 +280,22 @@ fun DetailScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Button(
-                        onClick = { onPlay(false) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(46.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = PlayerColors.Accent,
-                            contentColor = PlayerColors.AccentInk,
-                        ),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(5.dp))
-                        Text(
-                            text = if (resume != null) {
-                                "继续 ${formatTime(resume.positionMs)}"
-                            } else {
-                                "立即播放"
-                            },
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = { openInBrowser(context, item.url) },
-                        modifier = Modifier.height(46.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, PlayerColors.BorderStrong),
-                    ) {
-                        Text("原页", color = PlayerColors.Text)
-                    }
-                }
-                if (resume != null) {
-                    TextButton(
-                        onClick = { onPlay(true) },
-                        modifier = Modifier.padding(top = 2.dp),
-                    ) {
-                        Text("从头播放", color = PlayerColors.Accent, fontSize = 11.5.sp)
-                    }
-                }
-
-                if (actress.isNotBlank()) {
-                    SectionTitle("演员")
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(9.dp),
-                        verticalArrangement = Arrangement.spacedBy(9.dp),
-                    ) {
-                        item.actressNames().forEach { name ->
-                            val avatar = avatars[name.lowercase()].orEmpty()
-                            Row(
-                                modifier = Modifier
-                                    .widthIn(max = 260.dp)
-                                    .clip(RoundedCornerShape(999.dp))
-                                    .background(PlayerColors.Panel)
-                                    .clickable { onActorClick(name) }
-                                    .padding(start = 4.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(9.dp),
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .background(PlayerColors.AccentSoft),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        text = name.take(1),
-                                        color = PlayerColors.Accent,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                    if (avatar.isNotBlank()) {
-                                        AsyncImage(
-                                            model = avatar,
-                                            imageLoader = imageLoader,
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize(),
-                                        )
-                                    }
-                                }
-                                Text(
-                                    text = name,
-                                    color = PlayerColors.Text,
-                                    fontSize = 12.5.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (series.isNotBlank()) {
-                    SectionTitle("系列")
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(PlayerColors.Panel)
-                            .clickable { onSeriesClick(series) }
-                            .padding(horizontal = 12.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = series,
-                            color = PlayerColors.Accent,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text("›", color = PlayerColors.Accent, fontSize = 15.sp)
-                    }
-                }
-
-                SectionTitle("信息")
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(PlayerColors.Panel),
-                ) {
-                    InfoLine("编号", code)
-                    InfoLine("发售", releaseDate)
-                    InfoLine("厂商", publisher)
-                    InfoLine("厂牌", label)
-                    InfoLine("导演", director)
-                    InfoLine("时长", runtime)
-                    InfoLine("来源", item.sourceName)
-                    InfoLine(
-                        "上次打开",
-                        formatDateTime(item.lastOpenedAt),
-                    )
-                    InfoLine(
-                        "收藏时间",
-                        formatDate(item.createdAt),
-                    )
-                }
-
-                if (synopsis != null) {
-                    SectionTitle("简介")
-                    Text(
-                        text = synopsis,
-                        color = PlayerColors.Muted,
-                        fontSize = 12.5.sp,
-                        lineHeight = 20.sp,
-                    )
-                }
-
-                if (labels.isNotEmpty()) {
-                    SectionTitle("标签")
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        labels.forEach { tag ->
-                            Text(
-                                text = tag,
-                                color = PlayerColors.Muted,
-                                fontSize = 10.5.sp,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(PlayerColors.PanelSoft)
-                                    .clickable { onTagClick(tag) }
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                            )
-                        }
-                    }
-                }
-
-                if (related.isNotEmpty()) {
-                    SectionTitle("相关作品")
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(9.dp),
-                        contentPadding = PaddingValues(end = 20.dp),
-                    ) {
-                        items(related, key = { it.id }) { entry ->
-                            RelatedCard(
-                                item = entry,
-                                imageLoader = imageLoader,
-                                onClick = { onOpenRelated(entry) },
-                            )
-                        }
-                    }
-                }
+                DetailActionColumn(
+                    resume = resume,
+                    onPlay = onPlay,
+                    onOpen = { openInBrowser(context, item.url) },
+                )
+                DetailSections(
+                    item = item,
+                    meta = meta,
+                    avatars = avatars,
+                    imageLoader = imageLoader,
+                    onActorClick = onActorClick,
+                    onSeriesClick = onSeriesClick,
+                    onTagClick = onTagClick,
+                    related = related,
+                    onOpenRelated = onOpenRelated,
+                )
             }
 
             Spacer(
@@ -472,6 +303,338 @@ fun DetailScreen(
                     .height(28.dp)
                     .navigationBarsPadding(),
             )
+        }
+    }
+}
+
+private data class DetailMeta(
+    val code: String,
+    val actress: String,
+    val releaseDate: String,
+    val publisher: String,
+    val director: String,
+    val label: String,
+    val runtime: String,
+    val series: String,
+    val labels: List<String>,
+    val synopsis: String?,
+    val metaLine: String,
+)
+
+@Composable
+private fun rememberDetailMeta(item: LibraryItem): DetailMeta {
+    val releaseDate = item.extra("releaseDate")?.value.orEmpty()
+    val publisher = item.extra("publisher")?.value.orEmpty()
+    return DetailMeta(
+        code = item.extra("code")?.value.orEmpty(),
+        actress = item.extra("actress")?.value.orEmpty(),
+        releaseDate = releaseDate,
+        publisher = publisher,
+        director = item.extra("director")?.value.orEmpty(),
+        label = item.extra("label")?.value.orEmpty(),
+        runtime = item.runtime(),
+        series = item.series(),
+        labels = item.displayLabels(),
+        synopsis = listOf("description", "summary", "plot")
+            .firstNotNullOfOrNull { key -> item.extra(key)?.value?.takeIf { it.isNotBlank() } },
+        metaLine = listOf(releaseDate, publisher)
+            .filter { it.isNotBlank() }
+            .joinToString(" · ")
+            .ifBlank { hostOf(item.url) },
+    )
+}
+
+@Composable
+private fun DetailHeading(
+    item: LibraryItem,
+    meta: DetailMeta,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier) {
+        if (meta.code.isNotBlank()) {
+            Text(
+                text = meta.code,
+                color = PlayerColors.Accent,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.5.sp,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(PlayerColors.AccentSoft)
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
+            )
+        }
+        Text(
+            text = item.title.ifBlank { hostOf(item.url).ifBlank { item.url } },
+            color = PlayerColors.Text,
+            fontSize = 21.sp,
+            lineHeight = 26.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+        Text(
+            text = meta.metaLine,
+            color = PlayerColors.Muted,
+            fontSize = 10.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 5.dp),
+        )
+        if (item.favorite || item.watched) {
+            Row(
+                modifier = Modifier.padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                if (item.favorite) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(PlayerColors.AccentSoft)
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Favorite,
+                            contentDescription = null,
+                            tint = PlayerColors.Fav,
+                            modifier = Modifier.size(11.dp),
+                        )
+                        Text(
+                            text = "已收藏",
+                            color = PlayerColors.Fav,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+                if (item.watched) {
+                    Text(
+                        text = "已看",
+                        color = PlayerColors.Muted,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(PlayerColors.PanelSoft)
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailActionColumn(
+    resume: PlaybackProgress?,
+    onPlay: (Boolean) -> Unit,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Button(
+                onClick = { onPlay(false) },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(46.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PlayerColors.Accent,
+                    contentColor = PlayerColors.AccentInk,
+                ),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(5.dp))
+                Text(
+                    text = if (resume != null) {
+                        "继续 ${formatTime(resume.positionMs)}"
+                    } else {
+                        "立即播放"
+                    },
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            OutlinedButton(
+                onClick = onOpen,
+                modifier = Modifier.height(46.dp),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, PlayerColors.BorderStrong),
+            ) {
+                Text("原页", color = PlayerColors.Text)
+            }
+        }
+        if (resume != null) {
+            TextButton(onClick = { onPlay(true) }) {
+                Text("从头播放", color = PlayerColors.Accent, fontSize = 11.5.sp)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DetailSections(
+    item: LibraryItem,
+    meta: DetailMeta,
+    avatars: Map<String, String>,
+    imageLoader: ImageLoader,
+    onActorClick: (String) -> Unit,
+    onSeriesClick: (String) -> Unit,
+    onTagClick: (String) -> Unit,
+    related: List<LibraryItem>,
+    onOpenRelated: (LibraryItem) -> Unit,
+) {
+    Column {
+        if (meta.actress.isNotBlank()) {
+            SectionTitle("演员")
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                item.actressNames().forEach { name ->
+                    val avatar = avatars[name.lowercase()].orEmpty()
+                    Row(
+                        modifier = Modifier
+                            .widthIn(max = 260.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(PlayerColors.Panel)
+                            .clickable { onActorClick(name) }
+                            .padding(start = 4.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(9.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(PlayerColors.AccentSoft),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = name.take(1),
+                                color = PlayerColors.Accent,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            if (avatar.isNotBlank()) {
+                                AsyncImage(
+                                    model = avatar,
+                                    imageLoader = imageLoader,
+                                    contentDescription = null,
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        }
+                        Text(
+                            text = name,
+                            color = PlayerColors.Text,
+                            fontSize = 12.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+
+        if (meta.series.isNotBlank()) {
+            SectionTitle("系列")
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(PlayerColors.Panel)
+                    .clickable { onSeriesClick(meta.series) }
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = meta.series,
+                    color = PlayerColors.Accent,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("›", color = PlayerColors.Accent, fontSize = 15.sp)
+            }
+        }
+
+        SectionTitle("信息")
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(PlayerColors.Panel),
+        ) {
+            InfoLine("编号", meta.code)
+            InfoLine("发售", meta.releaseDate)
+            InfoLine("厂商", meta.publisher)
+            InfoLine("厂牌", meta.label)
+            InfoLine("导演", meta.director)
+            InfoLine("时长", meta.runtime)
+            InfoLine("来源", item.sourceName)
+            InfoLine("上次打开", formatDateTime(item.lastOpenedAt))
+            InfoLine("收藏时间", formatDate(item.createdAt))
+        }
+
+        if (meta.synopsis != null) {
+            SectionTitle("简介")
+            Text(
+                text = meta.synopsis,
+                color = PlayerColors.Muted,
+                fontSize = 12.5.sp,
+                lineHeight = 20.sp,
+            )
+        }
+
+        if (meta.labels.isNotEmpty()) {
+            SectionTitle("标签")
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                meta.labels.forEach { tag ->
+                    Text(
+                        text = tag,
+                        color = PlayerColors.Muted,
+                        fontSize = 10.5.sp,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(PlayerColors.PanelSoft)
+                            .clickable { onTagClick(tag) }
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            }
+        }
+
+        if (related.isNotEmpty()) {
+            SectionTitle("相关作品")
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+                contentPadding = PaddingValues(end = 20.dp),
+            ) {
+                items(related, key = { it.id }) { entry ->
+                    RelatedCard(
+                        item = entry,
+                        imageLoader = imageLoader,
+                        onClick = { onOpenRelated(entry) },
+                    )
+                }
+            }
         }
     }
 }
@@ -486,7 +649,7 @@ private fun DetailIcon(
         modifier = Modifier
             .size(38.dp)
             .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.34f))
+            .background(Color.Black.copy(alpha = 0.42f))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
