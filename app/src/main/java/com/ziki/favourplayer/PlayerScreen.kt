@@ -110,12 +110,12 @@ fun PlayerScreen(
                 runCatching {
                     SubtitleLoader.takePermission(context, uri)
                     val name = SubtitleLoader.displayName(context, uri)
-                    val cues = SubtitleParser.parse(SubtitleLoader.read(context, uri))
-                    SubtitleTrack(name, cues)
+                    val raw = SubtitleLoader.read(context, uri)
+                    Triple(name, SubtitleParser.parse(raw), raw)
                 }
             }
-            result.onSuccess { track ->
-                if (track.cues.isEmpty()) {
+            result.onSuccess { (name, cues, raw) ->
+                if (cues.isEmpty()) {
                     Toast.makeText(
                         context,
                         "没解析到字幕条目，支持 SRT / VTT / ASS",
@@ -123,12 +123,17 @@ fun PlayerScreen(
                     ).show()
                     return@onSuccess
                 }
-                caption = track
-                if (contentKey.isNotBlank()) subtitleStore.save(contentKey, uri, track.name)
-                Toast.makeText(context, "已加载 ${track.name}", Toast.LENGTH_SHORT).show()
+                caption = SubtitleTrack(name, cues)
+                if (contentKey.isNotBlank()) {
+                    subtitleStore.save(contentKey, uri, name)
+                    // 存一份到私有目录，之后不再依赖外部 URI 的授权
+                    subtitleStore.saveText(contentKey, name, raw)
+                }
+                Toast.makeText(context, "已加载 $name", Toast.LENGTH_SHORT).show()
             }.onFailure {
                 Log.w("FavourPlayer", "subtitle failed", it)
-                val reason = it.message?.take(48) ?: "未知错误"
+                // SecurityException 之类的 message 常常为 null，退回显示类名
+                val reason = it.message?.take(60) ?: it.javaClass.simpleName
                 Toast.makeText(context, "字幕加载失败：$reason", Toast.LENGTH_LONG).show()
             }
         }
@@ -286,16 +291,29 @@ fun PlayerScreen(
 
     LaunchedEffect(contentKey) {
         if (contentKey.isBlank()) return@LaunchedEffect
+
+        // 先读私有副本，完全不依赖外部 URI 的授权
+        val cached = subtitleStore.loadText(contentKey)
+        if (cached != null) {
+            val cues = withContext(Dispatchers.IO) { SubtitleParser.parse(cached.second) }
+            if (cues.isNotEmpty()) {
+                caption = SubtitleTrack(cached.first, cues)
+                return@LaunchedEffect
+            }
+        }
+
+        // 老记录只有 URI，读成功后顺手转存一份副本
         val saved = subtitleStore.load(contentKey) ?: return@LaunchedEffect
         val (uri, name) = saved
-        val cues = withContext(Dispatchers.IO) {
-            runCatching { SubtitleParser.parse(SubtitleLoader.read(context, uri)) }
-                .getOrDefault(emptyList())
-        }
+        val raw = withContext(Dispatchers.IO) {
+            runCatching { SubtitleLoader.read(context, uri) }.getOrNull()
+        } ?: return@LaunchedEffect
+        val cues = withContext(Dispatchers.IO) { SubtitleParser.parse(raw) }
         if (cues.isEmpty()) {
             subtitleStore.clear(contentKey)
         } else {
             caption = SubtitleTrack(name, cues)
+            subtitleStore.saveText(contentKey, name, raw)
         }
     }
 

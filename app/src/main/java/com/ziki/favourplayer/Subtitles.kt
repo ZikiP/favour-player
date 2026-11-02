@@ -3,6 +3,8 @@ package com.ziki.favourplayer
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.MediaStore
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,10 +25,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.json.JSONObject
+import java.io.File
+import java.io.FileInputStream
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import java.nio.charset.CodingErrorAction
+import java.security.MessageDigest
 
 data class SubtitleCue(
     val startMs: Long,
@@ -222,8 +227,9 @@ object SubtitleParser {
 
 class SubtitleStore(context: Context) {
 
-    private val prefs = context.applicationContext
-        .getSharedPreferences("favour_subtitle", Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val prefs = appContext.getSharedPreferences("favour_subtitle", Context.MODE_PRIVATE)
+    private val dir: File get() = File(appContext.filesDir, "subtitles")
 
     fun save(key: String, uri: Uri, name: String) {
         if (key.isBlank()) return
@@ -240,25 +246,115 @@ class SubtitleStore(context: Context) {
         return uri to prefs.getString(nameKey(key), "").orEmpty()
     }
 
+    /**
+     * 把字幕正文复制一份到应用私有目录。外部 URI 的授权经常失效
+     * （换机、文件被移走、provider 不支持持久授权），存下来就不怕了。
+     */
+    fun saveText(key: String, name: String, text: String) {
+        if (key.isBlank() || text.isBlank()) return
+        runCatching {
+            dir.mkdirs()
+            val fileName = fileNameFor(key)
+            File(dir, fileName).writeText(text)
+            prefs.edit()
+                .putString(textKey(key), fileName)
+                .putString(nameKey(key), name)
+                .apply()
+        }
+    }
+
+    fun loadText(key: String): Pair<String, String>? {
+        if (key.isBlank()) return null
+        val fileName = prefs.getString(textKey(key), null) ?: return null
+        val file = File(dir, fileName)
+        if (!file.isFile) return null
+        val text = runCatching { file.readText() }.getOrNull()
+            ?.takeIf { it.isNotBlank() } ?: return null
+        return prefs.getString(nameKey(key), "").orEmpty() to text
+    }
+
     fun clear(key: String) {
         if (key.isBlank()) return
-        prefs.edit().remove(uriKey(key)).remove(nameKey(key)).apply()
+        prefs.getString(textKey(key), null)?.let { name ->
+            runCatching { File(dir, name).delete() }
+        }
+        prefs.edit()
+            .remove(uriKey(key))
+            .remove(nameKey(key))
+            .remove(textKey(key))
+            .apply()
+    }
+
+    private fun fileNameFor(key: String): String {
+        val digest = MessageDigest.getInstance("SHA-1").digest(key.toByteArray())
+        return digest.joinToString("") { "%02x".format(it.toInt() and 0xFF) }.take(16) + ".txt"
     }
 
     private fun uriKey(key: String) = "$key\u0000uri"
     private fun nameKey(key: String) = "$key\u0000name"
+    private fun textKey(key: String) = "$key\u0000text"
 }
 
 object SubtitleLoader {
 
+    private const val TAG = "FavourPlayer"
+
     fun read(context: Context, uri: Uri): String {
-        val bytes = try {
-            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-        } catch (error: Exception) {
-            throw IOException("打不开文件（${error.javaClass.simpleName}）", error)
-        } ?: throw IOException("没有读取权限，可能文件被移走或授权已失效")
+        val bytes = openBytes(context, uri) ?: throw IOException(blockedReason(uri))
         if (bytes.isEmpty()) throw IOException("文件是空的")
         return SubtitleDecoder.decode(bytes)
+    }
+
+    /**
+     * 依次试三种读法。有些 provider 的 openInputStream 会抛空消息的
+     * SecurityException，但 openFileDescriptor 反而能过。
+     */
+    private fun openBytes(context: Context, uri: Uri): ByteArray? {
+        val resolver = context.contentResolver
+        try {
+            resolver.openInputStream(uri)?.use { return it.readBytes() }
+        } catch (error: Exception) {
+            Log.w(TAG, "subtitle openInputStream: ${error.javaClass.simpleName}")
+        }
+        try {
+            resolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                FileInputStream(pfd.fileDescriptor).use { return it.readBytes() }
+            }
+        } catch (error: Exception) {
+            Log.w(TAG, "subtitle openFileDescriptor: ${error.javaClass.simpleName}")
+        }
+        try {
+            resolver.query(
+                uri,
+                arrayOf(MediaStore.MediaColumns.DATA),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val path = cursor.getString(0)
+                    if (!path.isNullOrBlank()) {
+                        val file = File(path)
+                        if (file.isFile) return file.readBytes()
+                    }
+                }
+            }
+        } catch (error: Exception) {
+            Log.w(TAG, "subtitle query path: ${error.javaClass.simpleName}")
+        }
+        return null
+    }
+
+    /** Android 11 起 Android/data 下的文件对其他 App 一律不可读，SAF 授权也绕不过。 */
+    private fun blockedReason(uri: Uri): String {
+        val text = uri.toString()
+        val inAppDir = text.contains("/Android/data/", true) ||
+            text.contains("Android%2Fdata", true)
+        return if (inAppDir) {
+            "这个位置系统不开放读取，请把字幕移到「下载」目录再选一次"
+        } else {
+            "打不开文件，可能授权已失效，换个位置再选一次"
+        }
     }
 
     fun displayName(context: Context, uri: Uri): String {
