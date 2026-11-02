@@ -223,60 +223,55 @@ fun SettingsScreen(
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             )
         }
-    }
-
-    if (showSync) {
-        SyncSettingsDialog(
-            state = state,
-            onSave = onSaveSync,
-            onTest = onTest,
-            onRules = {
-                showSync = false
-                showRules = true
-            },
-            onCache = {
-                showSync = false
-                showCache = true
-            },
-            onDismiss = { showSync = false },
-        )
-    }
-    if (showCache) {
-        CacheSettingsDialog(
-            onDismiss = {
-                showCache = false
-                cache = cacheStore.load()
-            },
-        )
-    }
-    if (showRules) {
-        RulesDialog(
-            userJson = ruleStore.userJson(),
-            defaultJson = ruleStore.defaultExampleJson(),
-            onSave = { ruleStore.saveUserRules(it) },
-            onReset = { ruleStore.clearUserRules() },
-            onDismiss = { showRules = false },
-        )
-    }
-    if (showPlayback) {
-        PlaybackSettingsDialog(
-            initial = playerSettings,
-            onSave = {
-                playerPrefs.save(it)
-                playerSettings = it
-            },
-            onDismiss = { showPlayback = false },
-        )
-    }
-    if (showSubtitleStyle) {
-        SubtitleSettingsDialog(
-            initial = subtitleStyle,
-            onSave = {
-                subtitleStyleStore.save(it)
-                subtitleStyle = it
-            },
-            onDismiss = { showSubtitleStyle = false },
-        )
+        if (showSync) {
+            SyncSettingsPage(
+                state = state,
+                onSave = onSaveSync,
+                onTest = onTest,
+                onRules = {
+                    showSync = false
+                    showRules = true
+                },
+                onCache = {
+                    showSync = false
+                    showCache = true
+                },
+                onBack = { showSync = false },
+            )
+        } else if (showCache) {
+            CacheSettingsPage(
+                onBack = {
+                    showCache = false
+                    cache = cacheStore.load()
+                },
+            )
+        } else if (showRules) {
+            RulesPage(
+                userJson = ruleStore.userJson(),
+                defaultJson = ruleStore.defaultExampleJson(),
+                onSave = { ruleStore.saveUserRules(it) },
+                onReset = { ruleStore.clearUserRules() },
+                onBack = { showRules = false },
+            )
+        } else if (showPlayback) {
+            PlaybackSettingsPage(
+                initial = playerSettings,
+                onSave = {
+                    playerPrefs.save(it)
+                    playerSettings = it
+                },
+                onBack = { showPlayback = false },
+            )
+        } else if (showSubtitleStyle) {
+            SubtitleSettingsPage(
+                initial = subtitleStyle,
+                onSave = {
+                    subtitleStyleStore.save(it)
+                    subtitleStyle = it
+                },
+                onBack = { showSubtitleStyle = false },
+            )
+        }
     }
 }
 

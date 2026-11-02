@@ -415,7 +415,7 @@ fun LibraryScreen(
     }
 
     if (showFilters) {
-        LibraryFilterSheet(
+        FilterPage(
             sort = sort,
             onlyWithActress = onlyWithActress,
             unwatchedOnly = unwatchedOnly,
@@ -442,17 +442,17 @@ fun LibraryScreen(
                 seriesFilter = null
                 genreFilter = null
             },
-            onDismiss = { showFilters = false },
+            onBack = { showFilters = false },
         )
     }
 
     if (showManual) {
-        ManualPlayDialog(
+        ManualPlayPage(
             onPlay = {
                 showManual = false
                 onPlay(it, false)
             },
-            onDismiss = { showManual = false },
+            onBack = { showManual = false },
         )
     }
 }
@@ -1158,7 +1158,7 @@ private fun filterAndSort(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun LibraryFilterSheet(
+private fun FilterPage(
     sort: LibrarySort,
     onlyWithActress: Boolean,
     unwatchedOnly: Boolean,
@@ -1176,42 +1176,19 @@ private fun LibraryFilterSheet(
     onClearSeries: () -> Unit,
     onClearTag: () -> Unit,
     onReset: () -> Unit,
-    onDismiss: () -> Unit,
+    onBack: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = PlayerColors.Panel,
-        contentColor = PlayerColors.Text,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = "筛选与排序",
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Text(
-                        text = "排序、筛选与标签",
-                        color = PlayerColors.Muted,
-                        fontSize = 10.5.sp,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
-                TextButton(onClick = onReset) {
-                    Text("重置", color = PlayerColors.Accent, fontSize = 11.sp)
-                }
+    SubPage(
+        title = "筛选与排序",
+        subtitle = "排序、筛选与标签",
+        onBack = onBack,
+        contentSpacing = 12,
+        actions = {
+            TextButton(onClick = onReset) {
+                Text("重置", color = PlayerColors.Accent, fontSize = 11.sp)
             }
+        },
+    ) {
 
             if (actressFilter != null || seriesFilter != null || genreFilter != null) {
                 FilterSection("当前")
@@ -1302,7 +1279,7 @@ private fun LibraryFilterSheet(
             }
 
             Button(
-                onClick = onDismiss,
+                onClick = onBack,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 46.dp)
@@ -1315,7 +1292,6 @@ private fun LibraryFilterSheet(
             ) {
                 Text("完成", fontWeight = FontWeight.SemiBold)
             }
-        }
     }
 }
 

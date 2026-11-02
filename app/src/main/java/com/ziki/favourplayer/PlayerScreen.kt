@@ -603,13 +603,13 @@ fun PlayerScreen(
         }
 
         if (showSubtitleSettings) {
-            SubtitleSettingsDialog(
+            SubtitleSettingsPage(
                 initial = subtitleStyle,
                 onSave = { updated ->
                     subtitleStyle = updated
                     subtitleStyleStore.save(updated)
                 },
-                onDismiss = {
+                onBack = {
                     showSubtitleSettings = false
                     touch()
                 },

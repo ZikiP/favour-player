@@ -45,13 +45,13 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun SyncSettingsDialog(
+fun SyncSettingsPage(
     state: LibraryUiState,
     onSave: (String, String) -> String?,
     onTest: (String, String) -> Unit,
     onRules: () -> Unit,
     onCache: () -> Unit,
-    onDismiss: () -> Unit,
+    onBack: () -> Unit,
 ) {
     var pullUrl by rememberSaveable { mutableStateOf(state.pullUrl) }
     var pullToken by rememberSaveable { mutableStateOf(state.pullToken) }
@@ -62,57 +62,29 @@ fun SyncSettingsDialog(
         val message = onSave(pullUrl, pullToken)
         if (message == null) {
             error = null
-            if (close) onDismiss()
+            if (close) onBack()
         } else {
             error = message
         }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+    SubPage(
+        title = "同步",
+        subtitle = "从中间服务拉取最新收藏",
+        onBack = onBack,
+        contentSpacing = 12,
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .widthIn(max = 560.dp)
-                .heightIn(max = 680.dp),
-            shape = RoundedCornerShape(18.dp),
-            color = PlayerColors.Panel,
-            border = BorderStroke(1.dp, PlayerColors.Border),
-            shadowElevation = 24.dp,
-        ) {
-            Column(
-                modifier = Modifier
-                    .verticalScroll(rememberScrollState())
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "关闭", tint = PlayerColors.Faint)
-                    }
-                }
+        Text(
+            text = "手机只需在拉取时开启 Tailscale，平时可完全离线浏览缓存。",
+            color = PlayerColors.Muted,
+            fontSize = 12.5.sp,
+        )
 
-                Text(
-                    text = "同步",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = PlayerColors.Text,
-                )
-                Text(
-                    text = "从中间服务拉取最新收藏；手机只需在拉取时开启 Tailscale。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = PlayerColors.Muted,
-                )
-
-                Text(
-                    text = "中间服务",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = PlayerColors.Text,
-                )
+        Text(
+            text = "中间服务",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = PlayerColors.Text,
+        )
                 OutlinedTextField(
                     value = pullUrl,
                     onValueChange = { pullUrl = it; error = null },
@@ -226,8 +198,6 @@ fun SyncSettingsDialog(
                 error?.let { message ->
                     Text(text = message, color = PlayerColors.Danger, fontSize = 12.sp)
                 }
-            }
-        }
     }
 }
 

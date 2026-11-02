@@ -53,7 +53,7 @@ private data class SnapshotInfo(
 )
 
 @Composable
-fun CacheSettingsDialog(onDismiss: () -> Unit) {
+fun CacheSettingsPage(onBack: () -> Unit) {
     val context = LocalContext.current
     val store = remember { CacheStore(context) }
     val scope = rememberCoroutineScope()
@@ -77,45 +77,17 @@ fun CacheSettingsDialog(onDismiss: () -> Unit) {
         }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+    SubPage(
+        title = "缓存",
+        subtitle = "收藏文字、封面与视频分开管理",
+        onBack = onBack,
+        contentSpacing = 12,
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .widthIn(max = 560.dp)
-                .heightIn(max = 720.dp),
-            shape = RoundedCornerShape(18.dp),
-            color = PlayerColors.Panel,
-            border = BorderStroke(1.dp, PlayerColors.Border),
-            shadowElevation = 24.dp,
-        ) {
-            Column(
-                modifier = Modifier
-                    .verticalScroll(rememberScrollState())
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "关闭", tint = PlayerColors.Faint)
-                    }
-                }
-
-                Text(
-                    text = "缓存",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = PlayerColors.Text,
-                )
-                Text(
-                    text = "收藏文字、封面和视频片段可分别缓存；封面与视频的大小、位置可调。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = PlayerColors.Muted,
-                )
+        Text(
+            text = "收藏文字、封面和视频片段可分别缓存；封面与视频的大小、位置可调。",
+            color = PlayerColors.Muted,
+            fontSize = 12.5.sp,
+        )
 
                 Text(
                     text = "收藏信息",
@@ -297,7 +269,7 @@ fun CacheSettingsDialog(onDismiss: () -> Unit) {
                             store.save(config)
                             CoverCache.onConfigChanged(context, previous.location)
                             MediaCache.onConfigChanged(context, previous.location)
-                            onDismiss()
+                            onBack()
                         },
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
@@ -313,8 +285,6 @@ fun CacheSettingsDialog(onDismiss: () -> Unit) {
                         fontSize = 11.sp,
                     )
                 }
-            }
-        }
     }
 }
 
