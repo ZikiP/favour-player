@@ -83,8 +83,11 @@ fun PlayerScreen(
     val playbackStore = remember { PlaybackStore(context) }
 
     val subtitleStore = remember { SubtitleStore(context) }
+    val subtitleStyleStore = remember { SubtitleStyleStore(context) }
     val scope = rememberCoroutineScope()
     var caption by remember { mutableStateOf<SubtitleTrack?>(null) }
+    var subtitleStyle by remember { mutableStateOf(subtitleStyleStore.load()) }
+    var showSubtitleSettings by remember { mutableStateOf(false) }
 
     fun applySubtitleFile(uri: Uri) {
         scope.launch {
@@ -312,8 +315,8 @@ fun PlayerScreen(
         touch()
     }
 
-    LaunchedEffect(controlsVisible, interactionTick, isPlaying, locked) {
-        if (controlsVisible && isPlaying && !locked) {
+    LaunchedEffect(controlsVisible, interactionTick, isPlaying, locked, showSubtitleSettings) {
+        if (controlsVisible && isPlaying && !locked && !showSubtitleSettings) {
             delay(playerPrefs.autoHideMs.toLong())
             controlsVisible = false
         }
@@ -522,10 +525,17 @@ fun PlayerScreen(
             SubtitleOverlay(
                 track = track,
                 positionMs = previewMs ?: positionMs,
+                style = subtitleStyle,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = 24.dp)
-                    .padding(bottom = if (controlsVisible && !locked) 152.dp else 26.dp),
+                    .padding(
+                        bottom = if (controlsVisible && !locked) {
+                            152.dp
+                        } else {
+                            (26 + subtitleStyle.extraBottomDp()).dp
+                        },
+                    ),
             )
         }
 
@@ -546,6 +556,7 @@ fun PlayerScreen(
                     caption = null
                     subtitleStore.clear(contentKey)
                 },
+                onOpenSubtitleSettings = { showSubtitleSettings = true },
                 onTogglePlay = {
                     if (player.isPlaying) player.pause() else player.play()
                     touch()
@@ -588,6 +599,20 @@ fun PlayerScreen(
                 onSkipBack = { seekTo(player.currentPosition - 10_000L) },
                 onSkipForward = { seekTo(player.currentPosition + 10_000L) },
                 modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        if (showSubtitleSettings) {
+            SubtitleSettingsDialog(
+                initial = subtitleStyle,
+                onSave = { updated ->
+                    subtitleStyle = updated
+                    subtitleStyleStore.save(updated)
+                },
+                onDismiss = {
+                    showSubtitleSettings = false
+                    touch()
+                },
             )
         }
     }

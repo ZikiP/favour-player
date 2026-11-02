@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.VideoLibrary
@@ -72,12 +73,15 @@ fun SettingsScreen(
     val cacheStore = remember { CacheStore(context) }
     val ruleStore = remember { RuleStore(context) }
     val playerPrefs = remember { PlayerPrefs(context) }
+    val subtitleStyleStore = remember { SubtitleStyleStore(context) }
     var cache by remember { mutableStateOf(cacheStore.load()) }
     var playerSettings by remember { mutableStateOf(playerPrefs.load()) }
+    var subtitleStyle by remember { mutableStateOf(subtitleStyleStore.load()) }
     var showSync by remember { mutableStateOf(false) }
     var showCache by remember { mutableStateOf(false) }
     var showRules by remember { mutableStateOf(false) }
     var showPlayback by remember { mutableStateOf(false) }
+    var showSubtitleStyle by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -157,6 +161,14 @@ fun SettingsScreen(
                     subtitle = "播放画面左右两侧",
                     value = formatSeconds(playerSettings.doubleTapMs.toInt()),
                     onClick = { showPlayback = true },
+                )
+                RowDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.Subtitles,
+                    title = "字幕样式",
+                    subtitle = "字号、颜色、背景与时间偏移",
+                    value = "${subtitleStyle.fontSize.toInt()} sp",
+                    onClick = { showSubtitleStyle = true },
                 )
             }
 
@@ -254,6 +266,16 @@ fun SettingsScreen(
                 playerSettings = it
             },
             onDismiss = { showPlayback = false },
+        )
+    }
+    if (showSubtitleStyle) {
+        SubtitleSettingsDialog(
+            initial = subtitleStyle,
+            onSave = {
+                subtitleStyleStore.save(it)
+                subtitleStyle = it
+            },
+            onDismiss = { showSubtitleStyle = false },
         )
     }
 }

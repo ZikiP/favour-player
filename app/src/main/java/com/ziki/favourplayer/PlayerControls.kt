@@ -63,6 +63,7 @@ fun PlayerControls(
     subtitleActive: Boolean,
     onPickSubtitle: () -> Unit,
     onClearSubtitle: () -> Unit,
+    onOpenSubtitleSettings: () -> Unit,
     onTogglePlay: () -> Unit,
     onBack: () -> Unit,
     onOpenOriginal: () -> Unit,
@@ -122,6 +123,7 @@ fun PlayerControls(
                 active = subtitleActive,
                 onPick = onPickSubtitle,
                 onClear = onClearSubtitle,
+                onOpenSettings = onOpenSubtitleSettings,
             )
             Spacer(Modifier.width(4.dp))
             PlayerIconButton(Icons.Rounded.Lock, "锁定", onLock)
@@ -219,6 +221,7 @@ private fun SubtitleButton(
     active: Boolean,
     onPick: () -> Unit,
     onClear: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -240,6 +243,13 @@ private fun SubtitleButton(
                 onClick = {
                     expanded = false
                     onPick()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("字幕设置…", color = PlayerColors.Text) },
+                onClick = {
+                    expanded = false
+                    onOpenSettings()
                 },
             )
             if (active) {

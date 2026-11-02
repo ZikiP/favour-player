@@ -195,36 +195,118 @@ object SubtitleLoader {
     }
 }
 
+data class SubtitleStyle(
+    val offsetMs: Long = 0L,
+    val fontSize: Float = 15f,
+    val textColor: Int = 0xFFFFFFFF.toInt(),
+    val background: Int = 1,
+    val bold: Boolean = false,
+    val position: Int = 1,
+) {
+    companion object {
+        const val OFFSET_LIMIT_MS = 10_000L
+        const val OFFSET_STEP_MS = 500L
+        const val FONT_MIN = 12f
+        const val FONT_MAX = 28f
+
+        val COLORS = listOf(
+            0xFFFFFFFF.toInt() to "白",
+            0xFFFFE082.toInt() to "暖黄",
+            0xFFA5E3FF.toInt() to "天蓝",
+            0xFFB7F0C2.toInt() to "浅绿",
+        )
+    }
+}
+
+class SubtitleStyleStore(context: Context) {
+
+    private val prefs = context.applicationContext
+        .getSharedPreferences("favour_subtitle_style", Context.MODE_PRIVATE)
+
+    fun load(): SubtitleStyle = SubtitleStyle(
+        offsetMs = prefs.getLong(KEY_OFFSET, 0L)
+            .coerceIn(-SubtitleStyle.OFFSET_LIMIT_MS, SubtitleStyle.OFFSET_LIMIT_MS),
+        fontSize = prefs.getFloat(KEY_SIZE, 15f)
+            .coerceIn(SubtitleStyle.FONT_MIN, SubtitleStyle.FONT_MAX),
+        textColor = prefs.getInt(KEY_COLOR, 0xFFFFFFFF.toInt()),
+        background = prefs.getInt(KEY_BG, 1).coerceIn(0, 2),
+        bold = prefs.getBoolean(KEY_BOLD, false),
+        position = prefs.getInt(KEY_POS, 1).coerceIn(0, 2),
+    )
+
+    fun save(style: SubtitleStyle) {
+        prefs.edit()
+            .putLong(KEY_OFFSET, style.offsetMs)
+            .putFloat(KEY_SIZE, style.fontSize)
+            .putInt(KEY_COLOR, style.textColor)
+            .putInt(KEY_BG, style.background)
+            .putBoolean(KEY_BOLD, style.bold)
+            .putInt(KEY_POS, style.position)
+            .apply()
+    }
+
+    private companion object {
+        const val KEY_OFFSET = "offset_ms"
+        const val KEY_SIZE = "font_size"
+        const val KEY_COLOR = "text_color"
+        const val KEY_BG = "background"
+        const val KEY_BOLD = "bold"
+        const val KEY_POS = "position"
+    }
+}
+
+@Composable
+fun SubtitleText(
+    text: String,
+    style: SubtitleStyle,
+    modifier: Modifier = Modifier,
+) {
+    val background = when (style.background) {
+        0 -> Color.Transparent
+        2 -> Color.Black.copy(alpha = 0.78f)
+        else -> Color.Black.copy(alpha = 0.42f)
+    }
+    Text(
+        text = text,
+        style = TextStyle(
+            color = Color(style.textColor),
+            fontSize = style.fontSize.sp,
+            lineHeight = (style.fontSize * 1.38f).sp,
+            fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            shadow = Shadow(
+                color = Color.Black,
+                offset = Offset(1.5f, 1.5f),
+                blurRadius = 4f,
+            ),
+        ),
+        modifier = modifier
+            .widthIn(max = 560.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(background)
+            .padding(horizontal = 11.dp, vertical = 5.dp),
+    )
+}
+
 @Composable
 fun SubtitleOverlay(
     track: SubtitleTrack,
     positionMs: Long,
+    style: SubtitleStyle,
     modifier: Modifier = Modifier,
 ) {
-    val text = track.textAt(positionMs) ?: return
+    val text = track.textAt(positionMs - style.offsetMs) ?: return
     Box(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = text,
-            style = TextStyle(
-                color = Color.White,
-                fontSize = 15.sp,
-                lineHeight = 21.sp,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center,
-                shadow = Shadow(
-                    color = Color.Black,
-                    offset = Offset(1.5f, 1.5f),
-                    blurRadius = 4f,
-                ),
-            ),
-            modifier = Modifier
-                .widthIn(max = 560.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color.Black.copy(alpha = 0.42f))
-                .padding(horizontal = 11.dp, vertical = 5.dp),
-        )
+        SubtitleText(text = text, style = style)
     }
+}
+
+/** 位置档位对应的额外上移距离，叠在基础边距之上。 */
+fun SubtitleStyle.extraBottomDp(): Int = when (position) {
+    0 -> 0
+    2 -> 46
+    else -> 18
 }
