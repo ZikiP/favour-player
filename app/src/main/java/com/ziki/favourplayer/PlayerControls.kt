@@ -90,7 +90,7 @@ fun PlayerControls(
                     ),
                 )
                 .statusBarsPadding()
-                .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             PlayerIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", onBack)

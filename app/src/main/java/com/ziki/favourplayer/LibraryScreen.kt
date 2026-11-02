@@ -137,6 +137,8 @@ fun LibraryScreen(
     var showManual by rememberSaveable { mutableStateOf(false) }
     // "actor:<key>" 或 "series:<key>"，在当前 Tab 内打开二级页
     var worksPage by rememberSaveable { mutableStateOf<String?>(null) }
+    // 从详情页跳进作品页时记住来源，返回时回到那个详情而不是列表
+    var worksReturnDetailId by rememberSaveable { mutableStateOf<String?>(null) }
 
     val libraryGrid = rememberLazyGridState()
     val actressGrid = rememberLazyGridState()
@@ -185,6 +187,7 @@ fun LibraryScreen(
             onlyWithActress = false
             unwatchedOnly = false
             worksPage = null
+            worksReturnDetailId = null
         }
     }
 
@@ -255,6 +258,12 @@ fun LibraryScreen(
         if (detailItem != null) detailId = null else showSettings = false
     }
 
+    val closeWorksPage: () -> Unit = {
+        worksPage = null
+        worksReturnDetailId?.let { detailId = it }
+        worksReturnDetailId = null
+    }
+
     when {
         detailItem != null -> key(detailItem.id) {
             DetailScreen(
@@ -265,23 +274,13 @@ fun LibraryScreen(
             onBack = { detailId = null },
             onPlay = { fromStart -> onPlay(detailItem.url, fromStart) },
             onActorClick = { name ->
-                tabName = LibraryTab.Library.name
-                actressFilter = name.lowercase()
-                seriesFilter = null
-                genreFilter = null
-                query = ""
-                onlyWithActress = false
-                unwatchedOnly = false
+                worksReturnDetailId = detailItem.id
+                worksPage = "actor:${name.lowercase()}"
                 detailId = null
             },
             onSeriesClick = { series ->
-                tabName = LibraryTab.Library.name
-                seriesFilter = series.lowercase()
-                actressFilter = null
-                genreFilter = null
-                query = ""
-                onlyWithActress = false
-                unwatchedOnly = false
+                worksReturnDetailId = detailItem.id
+                worksPage = "series:${series.lowercase()}"
                 detailId = null
             },
             onTagClick = { tag ->
@@ -313,7 +312,7 @@ fun LibraryScreen(
             },
             items = worksItems,
             imageLoader = coverLoader,
-            onBack = { worksPage = null },
+            onBack = closeWorksPage,
             onOpen = { detailId = it.id },
             onPlay = { onPlay(it.url, false) },
         )
