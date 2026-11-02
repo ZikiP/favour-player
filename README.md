@@ -30,7 +30,7 @@ App 从你自己的 favour-sync 服务拉取 `/api/items` 快照并缓存到本�
 
 - 最新滚动调试包：<https://github.com/ZikiP/favour-player/releases/tag/debug-latest>
 - 直接下载：<https://github.com/ZikiP/favour-player/releases/download/debug-latest/app-debug.apk>
-- `v*` 标签会生成正式命名的 Release；每次运行的 APK 也作为 Actions artifact 保留 30 天。
+- `v*` 标签会生成正式命名的 Release。
 
 签名说明：
 
