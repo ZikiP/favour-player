@@ -84,7 +84,7 @@ fun PlayerControls(
                     ),
                 )
                 .statusBarsPadding()
-                .padding(start = 8.dp, end = 10.dp, top = 4.dp, bottom = 10.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             PlayerIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", onBack)
@@ -127,7 +127,7 @@ fun PlayerControls(
                     ),
                 )
                 .navigationBarsPadding()
-                .padding(start = 16.dp, end = 16.dp, top = 28.dp, bottom = 10.dp),
+                .padding(start = 20.dp, end = 20.dp, top = 28.dp, bottom = 10.dp),
         ) {
             PlayerSeekBar(
                 positionMs = positionMs,

@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,7 +16,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -42,6 +44,7 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -125,7 +128,7 @@ fun LibraryScreen(
     var genreFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var onlyWithActress by rememberSaveable { mutableStateOf(false) }
     var unwatchedOnly by rememberSaveable { mutableStateOf(false) }
-    var showTagSheet by rememberSaveable { mutableStateOf(false) }
+    var showFilters by rememberSaveable { mutableStateOf(false) }
     var detailId by rememberSaveable { mutableStateOf<String?>(null) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showManual by rememberSaveable { mutableStateOf(false) }
@@ -277,57 +280,30 @@ fun LibraryScreen(
                 onSettings = { showSettings = true },
             )
 
-            FavourSearchField(
-                value = query,
-                onValueChange = { query = it },
-                focusRequester = searchFocus,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-            )
-
-            if (tab == LibraryTab.Library || tab == LibraryTab.Favorites) {
-                SortChips(
-                    sort = sort,
-                    onlyWithActress = onlyWithActress,
-                    unwatchedOnly = unwatchedOnly,
-                    tagActive = genreFilter != null,
-                    onSort = { sortName = it.name },
-                    onToggleActress = { onlyWithActress = !onlyWithActress },
-                    onToggleUnwatched = { unwatchedOnly = !unwatchedOnly },
-                    onTags = { showTagSheet = true },
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                )
-            }
-
-            if (tab == LibraryTab.Library &&
-                (actressFilter != null || seriesFilter != null || genreFilter != null)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(7.dp),
-                ) {
-                    actressFilter?.let { key ->
-                        ActiveFilterChip(
-                            label = "演员 · ${activeActressName ?: key}",
-                            onClear = { actressFilter = null },
-                        )
-                    }
-                    seriesFilter?.let { key ->
-                        val label = seriesStats.firstOrNull { it.key == key }?.label ?: key
-                        ActiveFilterChip(
-                            label = "系列 · $label",
-                            onClear = { seriesFilter = null },
-                        )
-                    }
-                    genreFilter?.let { key ->
-                        val label = tagStats.firstOrNull { it.key == key }?.label ?: key
-                        ActiveFilterChip(
-                            label = "标签 · $label",
-                            onClear = { genreFilter = null },
-                        )
-                    }
+                Box(Modifier.weight(1f)) {
+                    FavourSearchField(
+                        value = query,
+                        onValueChange = { query = it },
+                        focusRequester = searchFocus,
+                    )
+                }
+                if (tab == LibraryTab.Library || tab == LibraryTab.Favorites) {
+                    FilterIcon(
+                        active = sort != LibrarySort.Recent ||
+                            onlyWithActress ||
+                            unwatchedOnly ||
+                            actressFilter != null ||
+                            seriesFilter != null ||
+                            genreFilter != null,
+                        onClick = { showFilters = true },
+                    )
                 }
             }
 
@@ -438,19 +414,35 @@ fun LibraryScreen(
         }
     }
 
-    if (showTagSheet) {
-        TagFilterSheet(
-            stats = tagStats,
-            selected = genreFilter,
-            onSelect = {
-                genreFilter = it
-                showTagSheet = false
+    if (showFilters) {
+        LibraryFilterSheet(
+            sort = sort,
+            onlyWithActress = onlyWithActress,
+            unwatchedOnly = unwatchedOnly,
+            genreFilter = genreFilter,
+            tagStats = tagStats,
+            actressFilter = actressFilter,
+            actressName = activeActressName,
+            seriesFilter = seriesFilter,
+            seriesLabel = seriesFilter?.let { key ->
+                seriesStats.firstOrNull { it.key == key }?.label
             },
-            onClear = {
+            onSort = { sortName = it.name },
+            onToggleActress = { onlyWithActress = !onlyWithActress },
+            onToggleUnwatched = { unwatchedOnly = !unwatchedOnly },
+            onTag = { genreFilter = it },
+            onClearActress = { actressFilter = null },
+            onClearSeries = { seriesFilter = null },
+            onClearTag = { genreFilter = null },
+            onReset = {
+                sortName = LibrarySort.Recent.name
+                onlyWithActress = false
+                unwatchedOnly = false
+                actressFilter = null
+                seriesFilter = null
                 genreFilter = null
-                showTagSheet = false
             },
-            onDismiss = { showTagSheet = false },
+            onDismiss = { showFilters = false },
         )
     }
 
@@ -573,7 +565,7 @@ private fun FavourSearchField(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(43.dp)
+            .height(44.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(PlayerColors.Panel)
             .border(1.dp, PlayerColors.Border, RoundedCornerShape(14.dp))
@@ -627,58 +619,32 @@ private fun FavourSearchField(
 }
 
 @Composable
-private fun SortChips(
-    sort: LibrarySort,
-    onlyWithActress: Boolean,
-    unwatchedOnly: Boolean,
-    tagActive: Boolean,
-    onSort: (LibrarySort) -> Unit,
-    onToggleActress: () -> Unit,
-    onToggleUnwatched: () -> Unit,
-    onTags: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
+private fun FilterIcon(active: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(PlayerColors.Panel)
+            .border(1.dp, PlayerColors.Border, CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
-        FavourChip(
-            text = "最近添加",
-            active = sort == LibrarySort.Recent,
-            onClick = { onSort(LibrarySort.Recent) },
+        Icon(
+            imageVector = Icons.Rounded.Tune,
+            contentDescription = "筛选与排序",
+            tint = if (active) PlayerColors.Accent else PlayerColors.Text,
+            modifier = Modifier.size(18.dp),
         )
-        FavourChip(
-            text = "最近打开",
-            active = sort == LibrarySort.LastOpened,
-            onClick = { onSort(LibrarySort.LastOpened) },
-        )
-        FavourChip(
-            text = "最早收藏",
-            active = sort == LibrarySort.Oldest,
-            onClick = { onSort(LibrarySort.Oldest) },
-        )
-        FavourChip(
-            text = "标题",
-            active = sort == LibrarySort.Title,
-            onClick = { onSort(LibrarySort.Title) },
-        )
-        FavourChip(
-            text = "有演员",
-            active = onlyWithActress,
-            onClick = onToggleActress,
-        )
-        FavourChip(
-            text = "未看",
-            active = unwatchedOnly,
-            onClick = onToggleUnwatched,
-        )
-        FavourChip(
-            text = "标签",
-            active = tagActive,
-            onClick = onTags,
-        )
+        if (active) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(9.dp)
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(PlayerColors.Accent),
+            )
+        }
     }
 }
 
@@ -1202,13 +1168,26 @@ private fun filterAndSort(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun TagFilterSheet(
-    stats: List<TagStat>,
-    selected: String?,
-    onSelect: (String) -> Unit,
-    onClear: () -> Unit,
+private fun LibraryFilterSheet(
+    sort: LibrarySort,
+    onlyWithActress: Boolean,
+    unwatchedOnly: Boolean,
+    genreFilter: String?,
+    tagStats: List<TagStat>,
+    actressFilter: String?,
+    actressName: String?,
+    seriesFilter: String?,
+    seriesLabel: String?,
+    onSort: (LibrarySort) -> Unit,
+    onToggleActress: () -> Unit,
+    onToggleUnwatched: () -> Unit,
+    onTag: (String?) -> Unit,
+    onClearActress: () -> Unit,
+    onClearSeries: () -> Unit,
+    onClearTag: () -> Unit,
+    onReset: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -1221,81 +1200,147 @@ private fun TagFilterSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "标签",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "${stats.size}",
-                    color = PlayerColors.Faint,
-                    fontSize = 11.sp,
-                )
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onClear) {
-                    Text("全部", color = PlayerColors.Accent, fontSize = 11.sp)
-                }
-            }
-            Text(
-                text = "类型和自定义标签会汇总在这里。",
-                color = PlayerColors.Muted,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
-            )
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(110.dp),
-                modifier = Modifier.heightIn(max = 420.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                gridItems(stats, key = { it.key }) { stat ->
-                    TagChip(
-                        stat = stat,
-                        active = stat.key == selected,
-                        onClick = { onSelect(stat.key) },
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "筛选与排序",
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    Text(
+                        text = "排序、筛选与标签",
+                        color = PlayerColors.Muted,
+                        fontSize = 10.5.sp,
+                        modifier = Modifier.padding(top = 2.dp),
                     )
                 }
+                TextButton(onClick = onReset) {
+                    Text("重置", color = PlayerColors.Accent, fontSize = 11.sp)
+                }
+            }
+
+            if (actressFilter != null || seriesFilter != null || genreFilter != null) {
+                FilterSection("当前")
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp),
+                ) {
+                    actressFilter?.let { key ->
+                        ActiveFilterChip(
+                            label = "演员 · ${actressName ?: key}",
+                            onClear = onClearActress,
+                        )
+                    }
+                    seriesFilter?.let { key ->
+                        ActiveFilterChip(
+                            label = "系列 · ${seriesLabel ?: key}",
+                            onClear = onClearSeries,
+                        )
+                    }
+                    genreFilter?.let { key ->
+                        val label = tagStats.firstOrNull { it.key == key }?.label ?: key
+                        ActiveFilterChip(
+                            label = "标签 · $label",
+                            onClear = onClearTag,
+                        )
+                    }
+                }
+            }
+
+            FilterSection("排序")
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                FavourChip(
+                    text = "最近添加",
+                    active = sort == LibrarySort.Recent,
+                    onClick = { onSort(LibrarySort.Recent) },
+                )
+                FavourChip(
+                    text = "最近打开",
+                    active = sort == LibrarySort.LastOpened,
+                    onClick = { onSort(LibrarySort.LastOpened) },
+                )
+                FavourChip(
+                    text = "最早收藏",
+                    active = sort == LibrarySort.Oldest,
+                    onClick = { onSort(LibrarySort.Oldest) },
+                )
+                FavourChip(
+                    text = "标题",
+                    active = sort == LibrarySort.Title,
+                    onClick = { onSort(LibrarySort.Title) },
+                )
+            }
+
+            FilterSection("筛选")
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                FavourChip(
+                    text = "有演员",
+                    active = onlyWithActress,
+                    onClick = onToggleActress,
+                )
+                FavourChip(
+                    text = "未看",
+                    active = unwatchedOnly,
+                    onClick = onToggleUnwatched,
+                )
+            }
+
+            FilterSection("标签")
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                FavourChip(
+                    text = "全部",
+                    active = genreFilter == null,
+                    onClick = { onTag(null) },
+                )
+                tagStats.forEach { stat ->
+                    FavourChip(
+                        text = "${stat.label} ${stat.count}",
+                        active = genreFilter == stat.key,
+                        onClick = { onTag(stat.key) },
+                    )
+                }
+            }
+
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 46.dp)
+                    .padding(top = 4.dp),
+                shape = RoundedCornerShape(11.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PlayerColors.Accent,
+                    contentColor = PlayerColors.AccentInk,
+                ),
+            ) {
+                Text("完成", fontWeight = FontWeight.SemiBold)
             }
         }
     }
 }
 
 @Composable
-private fun TagChip(
-    stat: TagStat,
-    active: Boolean,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(34.dp)
-            .clip(RoundedCornerShape(9.dp))
-            .background(if (active) PlayerColors.Accent else PlayerColors.PanelSoft)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = stat.label,
-            color = if (active) PlayerColors.AccentInk else PlayerColors.Text,
-            fontSize = 10.5.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = "${stat.count}",
-            color = if (active) PlayerColors.AccentInk.copy(alpha = 0.7f) else PlayerColors.Faint,
-            fontSize = 9.sp,
-        )
-    }
+private fun FilterSection(text: String) {
+    Text(
+        text = text,
+        color = PlayerColors.Faint,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 1.2.sp,
+        modifier = Modifier.padding(top = 4.dp),
+    )
 }
 
 private fun matchesQuery(item: LibraryItem, rawQuery: String): Boolean {

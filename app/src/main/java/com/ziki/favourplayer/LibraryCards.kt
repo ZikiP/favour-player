@@ -48,66 +48,67 @@ fun ItemCard(
 ) {
     val code = item.extra("code")?.value.orEmpty()
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1.5f)
-            .clip(RoundedCornerShape(16.dp))
-            .background(PlayerColors.PanelSoft)
             .clickable(onClick = onClick),
     ) {
-        CoverArt(item, imageLoader)
-        if (code.isNotBlank()) {
-            Text(
-                text = code,
-                color = Color.White,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                fontSize = 9.5.sp,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color.Black.copy(alpha = 0.48f))
-                    .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
-            )
-        }
-        if (item.favorite) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1.5f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(PlayerColors.PanelSoft),
+        ) {
+            CoverArt(item, imageLoader)
+            if (item.favorite) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Favorite,
+                        contentDescription = "最爱",
+                        tint = PlayerColors.Fav,
+                        modifier = Modifier.size(13.dp),
+                    )
+                }
+            }
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
+                    .align(Alignment.BottomEnd)
                     .padding(8.dp)
-                    .size(26.dp)
+                    .size(34.dp)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.45f))
-                    .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape),
+                    .background(Color.Black.copy(alpha = 0.52f))
+                    .border(1.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+                    .clickable(onClick = onPlay),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.Favorite,
-                    contentDescription = "最爱",
-                    tint = PlayerColors.Fav,
-                    modifier = Modifier.size(13.dp),
+                    imageVector = Icons.Rounded.PlayArrow,
+                    contentDescription = "播放",
+                    tint = Color.White,
+                    modifier = Modifier.size(19.dp),
                 )
             }
         }
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(8.dp)
-                .size(34.dp)
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.52f))
-                .border(1.dp, Color.White.copy(alpha = 0.22f), CircleShape)
-                .clickable(onClick = onPlay),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.PlayArrow,
-                contentDescription = "播放",
-                tint = Color.White,
-                modifier = Modifier.size(19.dp),
+        if (code.isNotBlank()) {
+            Text(
+                text = code,
+                color = PlayerColors.Muted,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Medium,
+                fontSize = 10.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 2.dp, top = 5.dp),
             )
         }
     }
