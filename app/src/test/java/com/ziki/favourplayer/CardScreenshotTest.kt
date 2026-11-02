@@ -91,22 +91,28 @@ class CardScreenshotTest {
                         text = "演员卡片 · 头像 / 头像失败回退",
                         color = PlayerColors.Muted,
                     )
-                    ActressCard(
-                        name = first.actressNames().first(),
-                        count = 12,
-                        avatar = avatar,
-                        favorite = true,
-                        imageLoader = loader,
-                        onClick = {},
-                    )
-                    ActressCard(
-                        name = "头像加载失败",
-                        count = 3,
-                        avatar = "https://invalid.example.invalid/avatar.jpg",
-                        favorite = false,
-                        imageLoader = loader,
-                        onClick = {},
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(Modifier.weight(1f)) {
+                            ActressCard(
+                                name = first.actressNames().first(),
+                                count = 12,
+                                avatar = avatar,
+                                favorite = true,
+                                imageLoader = loader,
+                                onClick = {},
+                            )
+                        }
+                        Box(Modifier.weight(1f)) {
+                            ActressCard(
+                                name = "头像加载失败",
+                                count = 3,
+                                avatar = "https://invalid.example.invalid/avatar.jpg",
+                                favorite = false,
+                                imageLoader = loader,
+                                onClick = {},
+                            )
+                        }
+                    }
                 }
             }
         }

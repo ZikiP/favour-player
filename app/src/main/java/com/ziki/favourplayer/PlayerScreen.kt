@@ -8,6 +8,9 @@ import android.media.AudioManager
 import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,6 +41,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,7 +63,10 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import kotlin.math.roundToInt
 
@@ -74,6 +81,39 @@ fun PlayerScreen(
     val activity = context as Activity
     val playerPrefs = remember { PlayerPrefs(context).load() }
     val playbackStore = remember { PlaybackStore(context) }
+
+    val subtitleStore = remember { SubtitleStore(context) }
+    val scope = rememberCoroutineScope()
+    var caption by remember { mutableStateOf<SubtitleTrack?>(null) }
+
+    fun applySubtitleFile(uri: Uri) {
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    SubtitleLoader.takePermission(context, uri)
+                    val name = SubtitleLoader.displayName(context, uri)
+                    val cues = SubtitleParser.parse(SubtitleLoader.read(context, uri))
+                    SubtitleTrack(name, cues)
+                }
+            }
+            result.onSuccess { track ->
+                if (track.cues.isEmpty()) {
+                    Toast.makeText(context, "没有解析到字幕内容", Toast.LENGTH_SHORT).show()
+                    return@onSuccess
+                }
+                caption = track
+                if (contentKey.isNotBlank()) subtitleStore.save(contentKey, uri, track.name)
+                Toast.makeText(context, "已加载 ${track.name}", Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                Log.w("FavourPlayer", "subtitle failed", it)
+                Toast.makeText(context, "字幕读取失败", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val subtitlePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> if (uri != null) applySubtitleFile(uri) }
 
     val player = remember(stream.masterUrl) { buildPlayer(context, stream) }
     var resumed by remember { mutableStateOf(false) }
@@ -192,6 +232,21 @@ fun PlayerScreen(
 
     LaunchedEffect(player) {
         player.setPlaybackSpeed(playerPrefs.defaultSpeed)
+    }
+
+    LaunchedEffect(contentKey) {
+        if (contentKey.isBlank()) return@LaunchedEffect
+        val saved = subtitleStore.load(contentKey) ?: return@LaunchedEffect
+        val (uri, name) = saved
+        val cues = withContext(Dispatchers.IO) {
+            runCatching { SubtitleParser.parse(SubtitleLoader.read(context, uri)) }
+                .getOrDefault(emptyList())
+        }
+        if (cues.isEmpty()) {
+            subtitleStore.clear(contentKey)
+        } else {
+            caption = SubtitleTrack(name, cues)
+        }
     }
 
     var controlsVisible by remember { mutableStateOf(true) }
@@ -463,6 +518,17 @@ fun PlayerScreen(
             }
         }
 
+        caption?.let { track ->
+            SubtitleOverlay(
+                track = track,
+                positionMs = previewMs ?: positionMs,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = if (controlsVisible && !locked) 152.dp else 26.dp),
+            )
+        }
+
         if (controlsVisible && !locked && errorMessage == null) {
             PlayerControls(
                 title = stream.title,
@@ -474,6 +540,12 @@ fun PlayerScreen(
                 speed = playbackSpeed,
                 qualities = qualities,
                 selectedHeight = selectedHeight,
+                subtitleActive = caption != null,
+                onPickSubtitle = { subtitlePicker.launch(arrayOf("*/*")) },
+                onClearSubtitle = {
+                    caption = null
+                    subtitleStore.clear(contentKey)
+                },
                 onTogglePlay = {
                     if (player.isPlaying) player.pause() else player.play()
                     touch()

@@ -332,21 +332,18 @@ fun ActressCard(
     onClick: () -> Unit,
 ) {
     val hue = hueOf(name)
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(PlayerColors.Panel)
             .border(1.dp, PlayerColors.Border, RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(11.dp),
+            .clickable(onClick = onClick),
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
+                .fillMaxWidth()
+                .aspectRatio(1f)
                 .background(Color.hsv(hue, 0.32f, 0.22f)),
             contentAlignment = Alignment.Center,
         ) {
@@ -354,7 +351,7 @@ fun ActressCard(
                 text = name.take(1).uppercase(),
                 color = Color.hsv(hue, 0.42f, 0.86f),
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp,
+                fontSize = 30.sp,
             )
             if (avatar.isNotBlank()) {
                 AsyncImage(
@@ -365,12 +362,30 @@ fun ActressCard(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
+            if (favorite) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.46f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Favorite,
+                        contentDescription = "喜爱的演员",
+                        tint = PlayerColors.Fav,
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
+            }
         }
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.padding(horizontal = 11.dp, vertical = 9.dp)) {
             Text(
                 text = name,
                 color = PlayerColors.Text,
-                fontSize = 13.5.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -379,14 +394,7 @@ fun ActressCard(
                 text = "$count 部作品",
                 color = PlayerColors.Muted,
                 fontSize = 10.5.sp,
-            )
-        }
-        if (favorite) {
-            Icon(
-                imageVector = Icons.Rounded.Favorite,
-                contentDescription = "喜爱的演员",
-                tint = PlayerColors.Fav,
-                modifier = Modifier.size(13.dp),
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
     }

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Replay10
 import androidx.compose.material.icons.automirrored.rounded.RotateRight
+import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -59,6 +60,9 @@ fun PlayerControls(
     speed: Float,
     qualities: List<QualityOption>,
     selectedHeight: Int,
+    subtitleActive: Boolean,
+    onPickSubtitle: () -> Unit,
+    onClearSubtitle: () -> Unit,
     onTogglePlay: () -> Unit,
     onBack: () -> Unit,
     onOpenOriginal: () -> Unit,
@@ -113,6 +117,12 @@ fun PlayerControls(
                 }
             }
             PlayerIconButton(Icons.AutoMirrored.Rounded.OpenInNew, "打开原页", onOpenOriginal)
+            Spacer(Modifier.width(4.dp))
+            SubtitleButton(
+                active = subtitleActive,
+                onPick = onPickSubtitle,
+                onClear = onClearSubtitle,
+            )
             Spacer(Modifier.width(4.dp))
             PlayerIconButton(Icons.Rounded.Lock, "锁定", onLock)
         }
@@ -184,6 +194,7 @@ private fun PlayerIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     onClick: () -> Unit,
+    tint: Color = Color.White,
 ) {
     Box(
         modifier = Modifier
@@ -197,9 +208,50 @@ private fun PlayerIconButton(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = Color.White,
+            tint = tint,
             modifier = Modifier.size(17.dp),
         )
+    }
+}
+
+@Composable
+private fun SubtitleButton(
+    active: Boolean,
+    onPick: () -> Unit,
+    onClear: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        PlayerIconButton(
+            icon = Icons.Rounded.Subtitles,
+            label = if (active) "字幕已挂载" else "挂载字幕",
+            tint = if (active) PlayerColors.Accent else Color.White,
+            onClick = { expanded = true },
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            shape = RoundedCornerShape(14.dp),
+            containerColor = PlayerColors.Panel,
+            border = BorderStroke(1.dp, PlayerColors.Border),
+        ) {
+            DropdownMenuItem(
+                text = { Text("选择字幕文件…", color = PlayerColors.Text) },
+                onClick = {
+                    expanded = false
+                    onPick()
+                },
+            )
+            if (active) {
+                DropdownMenuItem(
+                    text = { Text("关闭字幕", color = PlayerColors.Text) },
+                    onClick = {
+                        expanded = false
+                        onClear()
+                    },
+                )
+            }
+        }
     }
 }
 
