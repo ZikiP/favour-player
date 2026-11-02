@@ -361,8 +361,9 @@ private fun buildPlayer(context: Context, stream: ResolvedStream): ExoPlayer {
         put("User-Agent", Resolver.DESKTOP_UA)
         if (stream.referer.isNotBlank()) put("Referer", stream.referer)
     }
-    val dataSourceFactory = OkHttpDataSource.Factory(OkHttpClient())
+    val upstream = OkHttpDataSource.Factory(OkHttpClient())
         .setDefaultRequestProperties(headers)
+    val dataSourceFactory = MediaCache.dataSourceFactory(context, upstream)
 
     val mediaSource = HlsMediaSource.Factory(dataSourceFactory)
         .setAllowChunklessPreparation(true)

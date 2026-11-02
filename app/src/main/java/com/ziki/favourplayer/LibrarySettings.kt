@@ -59,6 +59,7 @@ fun ReceiveSettingsDialog(
     onRegenerateToken: () -> String,
     onRefreshAddresses: () -> Unit,
     onRules: () -> Unit,
+    onCache: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var port by rememberSaveable { mutableStateOf(state.port.toString()) }
@@ -233,6 +234,9 @@ fun ReceiveSettingsDialog(
                     }
                     TextButton(onClick = onRules) {
                         Text("解析规则…", color = PlayerColors.Accent)
+                    }
+                    TextButton(onClick = onCache) {
+                        Text("缓存设置…", color = PlayerColors.Accent)
                     }
                 }
                 error?.let { message ->

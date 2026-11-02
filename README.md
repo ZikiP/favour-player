@@ -19,6 +19,7 @@ Favour 扩展(手机同步) --PUT /api/items--> FavourPlayer 前台接收服务
 - 播放：卡片或详情直接起播；手动播放、浏览器分享文本仍可用。
 - 横竖屏适配；封面 Coil 缓存；解析规则可在 App 内编辑。
 - 同步完成后资料库自动刷新；离线展示上次快照。
+- **视频缓存**：可开关，上限 512MB–8GB（LRU），位置可选内部/外部 App 缓存目录；显示占用并可清理。
 
 ## 下载 / CI
 
@@ -47,6 +48,16 @@ Favour 扩展(手机同步) --PUT /api/items--> FavourPlayer 前台接收服务
 - 关闭 App 后前台服务仍会运行；不想常驻可在设置里关闭。
 - 令牌明文保存在 App 私有 SharedPreferences；泄露后重新生成即可，扩展需同步更新。
 - 旧的 favour-sync 服务（8789）已停用、计划任务已 Disabled；`favour-sync/data` 里的数据和令牌文件保留，但不再参与同步。
+
+## 视频缓存
+
+App 设置 → 接收同步 → **缓存设置**：
+
+- 开关视频缓存；最大缓存 512MB / 1GB / 2GB / 4GB / 8GB（LRU 淘汰）。
+- 位置：内部存储 / 外部存储（App 专属缓存目录，卸载时随 App 清理；不支持任意 SAF 目录）。
+- 显示已用/上限/文件数和实际路径；可清理缓存。
+- 缓存的是 HLS 分片与播放列表，用于减少重复下载、改善拖动/重播；**不保证完整离线**（解析页面仍需网络，且分片不保证全部命中）。
+- 默认开启、2GB、内部存储；改配置后下一次播放生效。
 
 ## 解析规则
 
@@ -91,10 +102,10 @@ Favour 扩展(手机同步) --PUT /api/items--> FavourPlayer 前台接收服务
 
 ## 版本规则
 
-- `v0.0.1` 是旧的“App 拉取”版本；从 **`v0.0.2`** 起为直推版本。
+- `v0.0.1` 是旧的“App 拉取”版本；`v0.0.2` 起为直推版本；`v0.0.3` 起带视频缓存。
 - `main` 每次推送：`debug-latest`，versionName = `<version.properties 的 versionName>-dev.<run_number>`，versionCode = GitHub run number。
 - tag 构建：versionName = tag 去掉 `v`，生成同名 Release。
-- 发版：改 `version.properties` → `git tag v0.0.2` → `git push origin v0.0.2`。
+- 发版：改 `version.properties` → `git tag v0.0.3` → `git push origin v0.0.3`。
 - 本地构建默认读 `version.properties`；CI 通过 `-PversionName` / `-PversionCode` 覆盖。
 
 ## 构建
@@ -123,6 +134,9 @@ app/src/main/java/com/ziki/favourplayer/
   LibraryScreen.kt     顶部栏、搜索、Tabs、网格、空态
   LibraryCards.kt      卡片、演员卡、详情弹窗
   LibrarySettings.kt   接收设置、手动播放
+  CacheStore.kt        缓存配置(开关/上限/位置)
+  MediaCache.kt        Media3 SimpleCache + LRU
+  CacheSettings.kt     缓存设置弹窗
   RulesSettings.kt     解析规则编辑弹窗
   ResolveRules.kt      规则模型与 JSON 解析
   RuleStore.kt         默认规则(asset) + 用户规则(prefs)
@@ -140,13 +154,13 @@ app/src/main/java/com/ziki/favourplayer/
 app/src/main/assets/resolver_rules.json  默认解析规则示例
 ```
 
-扩展侧改动在 `favour-plugin` 的 `manager/`（同步弹窗改为直推地址 + 令牌），未提交该仓库。
+扩展侧改动在 `favour-plugin` 的 `manager/`（同步弹窗改为直推地址 + 令牌），已提交并推送（`8245930`）。
 
 ## 验证状态
 
-- `assembleDebug` 通过（接收服务/前台服务/资料库/规则解析）。
+- `assembleDebug` 通过（接收服务/前台服务/资料库/规则解析/视频缓存）。
 - 播放器：此前真机已验证解析、清晰度、进度、手势、雪碧图、进度条单次 seek/无回跳。
-- 资料库/接收同步：真机验证待手机重连（需要电脑扩展向手机推送一次）。
+- 资料库/接收同步/视频缓存：真机验证待手机重连（需要电脑扩展向手机推送一次，并播放一次确认缓存增长）。
 
 ## 已知限制
 
@@ -154,6 +168,7 @@ app/src/main/assets/resolver_rules.json  默认解析规则示例
 - 手机与电脑需在同一 Tailscale/LAN；接收地址用手机实际 IP。
 - 数据接口是 HTTP + Bearer（局域网/Tailscale 内）；令牌泄露请重新生成。
 - 只读接收：App 不回写扩展；合集/排序/多选暂未实现。
+- 视频缓存不保证完整离线；位置只支持 App 内部/外置缓存目录，不支持任意 SAF 文件夹。
 - 数据源必须用 `OkHttpDataSource`；`DefaultHttpDataSource` 在真机会被视频 CDN 返回 403。
-- 旧 favour-sync 的 `/favour` Tailscale 路由仍存在但已 502，可另行移除。
+- 旧 favour-sync 的 `/favour` Tailscale 路由已移除，8789 服务已停用。
 - 本项目仅用于个人调试；公开仓库不代表对内容来源的版权或 ToS 授权。

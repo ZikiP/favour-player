@@ -70,6 +70,7 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
     var actressFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var detail by remember { mutableStateOf<LibraryItem?>(null) }
     var showRules by remember { mutableStateOf(false) }
+    var showCache by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val ruleStore = remember { RuleStore(context) }
 
@@ -260,6 +261,10 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
                 showSettings = false
                 showRules = true
             },
+            onCache = {
+                showSettings = false
+                showCache = true
+            },
             onDismiss = { showSettings = false },
         )
     }
@@ -271,6 +276,9 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
             onReset = { ruleStore.clearUserRules() },
             onDismiss = { showRules = false },
         )
+    }
+    if (showCache) {
+        CacheSettingsDialog(onDismiss = { showCache = false })
     }
     if (showManual) {
         ManualPlayDialog(
