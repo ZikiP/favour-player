@@ -47,11 +47,6 @@ fun ItemCard(
     onPlay: () -> Unit,
 ) {
     val code = item.extra("code")?.value.orEmpty()
-    val actress = item.extra("actress")?.value.orEmpty()
-    val date = item.extra("releaseDate")?.value.orEmpty()
-    val labels = item.displayLabels().take(2)
-    val subtitle = listOf(actress, date).filter { it.isNotBlank() }.joinToString(" · ")
-        .ifBlank { hostOf(item.url) }
 
     Box(
         modifier = Modifier
@@ -62,52 +57,21 @@ fun ItemCard(
             .clickable(onClick = onClick),
     ) {
         CoverArt(item, imageLoader)
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.10f),
-                            Color.Black.copy(alpha = 0.88f),
-                        ),
-                    ),
-                ),
-        )
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (code.isNotBlank()) {
-                Text(
-                    text = code,
-                    color = Color.White,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 9.5.sp,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color.Black.copy(alpha = 0.48f))
-                        .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(6.dp))
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
-                )
-            }
-            if (item.watched) {
-                Text(
-                    text = "已看",
-                    color = Color.White.copy(alpha = 0.82f),
-                    fontSize = 8.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .padding(horizontal = 5.dp, vertical = 3.dp),
-                )
-            }
+        if (code.isNotBlank()) {
+            Text(
+                text = code,
+                color = Color.White,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.5.sp,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color.Black.copy(alpha = 0.48f))
+                    .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            )
         }
         if (item.favorite) {
             Box(
@@ -127,40 +91,6 @@ fun ItemCard(
                     modifier = Modifier.size(13.dp),
                 )
             }
-        }
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .padding(start = 10.dp, end = 46.dp, bottom = 9.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = item.title.ifBlank { hostOf(item.url).ifBlank { item.url } },
-                color = Color.White,
-                fontSize = 12.5.sp,
-                lineHeight = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (labels.isNotEmpty()) {
-                Text(
-                    text = labels.joinToString(" · "),
-                    color = PlayerColors.Accent,
-                    fontSize = 9.5.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Text(
-                text = subtitle,
-                color = Color.White.copy(alpha = 0.64f),
-                fontSize = 10.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
         Box(
             modifier = Modifier
@@ -271,9 +201,8 @@ fun ContinueCard(
 
 @Composable
 private fun CoverArt(item: LibraryItem, imageLoader: ImageLoader) {
-    val code = item.extra("code")?.value.orEmpty()
     CoverFallback(
-        label = code.ifBlank { hostOf(item.url).take(1).uppercase() },
+        label = "",
         seed = item.url,
         modifier = Modifier.fillMaxSize(),
     )
@@ -354,7 +283,7 @@ fun SeriesCard(
             )
         } else {
             CoverFallback(
-                label = label.take(2),
+                label = "",
                 seed = label,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -389,18 +318,6 @@ fun SeriesCard(
                 fontSize = 9.5.sp,
             )
         }
-        Text(
-            text = count.toString(),
-            color = PlayerColors.AccentInk,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp)
-                .clip(CircleShape)
-                .background(PlayerColors.Accent)
-                .padding(horizontal = 7.dp, vertical = 3.dp),
-        )
     }
 }
 
@@ -432,6 +349,12 @@ fun ActressCard(
                 .background(Color.hsv(hue, 0.32f, 0.22f)),
             contentAlignment = Alignment.Center,
         ) {
+            Text(
+                text = name.take(1).uppercase(),
+                color = Color.hsv(hue, 0.42f, 0.86f),
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 16.sp,
+            )
             if (avatar.isNotBlank()) {
                 AsyncImage(
                     model = avatar,
@@ -439,13 +362,6 @@ fun ActressCard(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                Text(
-                    text = name.take(1).uppercase(),
-                    color = Color.hsv(hue, 0.42f, 0.86f),
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp,
                 )
             }
         }
@@ -472,11 +388,6 @@ fun ActressCard(
                 modifier = Modifier.size(13.dp),
             )
         }
-        Text(
-            text = "›",
-            color = PlayerColors.Faint,
-            fontSize = 18.sp,
-        )
     }
 }
 

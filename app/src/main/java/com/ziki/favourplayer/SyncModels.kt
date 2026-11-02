@@ -26,6 +26,9 @@ data class LibraryItem(
 
     fun actressNames(): List<String> =
         splitLabels(extra("actress")?.value)
+            .map(::baseActressName)
+            .filter { it.isNotEmpty() }
+            .distinctBy { it.lowercase() }
 
     fun genres(): List<String> =
         splitLabels(extra("genres")?.value)
@@ -54,6 +57,14 @@ data class LibrarySnapshot(
     val actressAvatars: Map<String, String> = emptyMap(),
     val actressMeta: Map<String, ActressMeta> = emptyMap(),
 )
+
+private val TRAILING_PAREN = Regex("""\s*[（(][^（）()]*[)）]\s*$""")
+private val SPACES = Regex("""\s+""")
+
+private fun baseActressName(name: String): String {
+    val value = name.replace(SPACES, " ").trim()
+    return value.replace(TRAILING_PAREN, "").trim().ifEmpty { value }
+}
 
 private fun splitLabels(raw: String?): List<String> =
     raw.orEmpty()

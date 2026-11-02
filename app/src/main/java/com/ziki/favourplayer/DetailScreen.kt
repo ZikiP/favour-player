@@ -114,7 +114,7 @@ fun DetailScreen(
                     )
                 } else {
                     CoverFallback(
-                        label = code.ifBlank { hostOf(item.url).take(1).uppercase() },
+                        label = "",
                         seed = item.url,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -176,7 +176,7 @@ fun DetailScreen(
                             )
                         } else {
                             CoverFallback(
-                                label = code.ifBlank { hostOf(item.url).take(1).uppercase() },
+                                label = "",
                                 seed = item.url,
                                 modifier = Modifier.fillMaxSize(),
                             )
