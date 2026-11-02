@@ -147,7 +147,8 @@ fun LibraryScreen(
 
     val tab = LibraryTab.entries.firstOrNull { it.name == tabName } ?: LibraryTab.Library
     val sort = LibrarySort.entries.firstOrNull { it.name == sortName } ?: LibrarySort.Recent
-    val items = state.snapshot?.items.orEmpty()
+    // 干净模式：资料库一片空白，什么收藏都看不到
+    val items = if (CleanMode.enabled) emptyList() else state.snapshot?.items.orEmpty()
     val actressStats = remember(items, state.snapshot?.actressAvatars, state.snapshot?.actressMeta) {
         buildActressStats(
             items,

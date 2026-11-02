@@ -6,5 +6,10 @@ import coil.ImageLoaderFactory
 
 class FavourApp : Application(), ImageLoaderFactory {
 
+    override fun onCreate() {
+        super.onCreate()
+        CleanMode.attach(this)
+    }
+
     override fun newImageLoader(): ImageLoader = CoverCache.imageLoader(this)
 }

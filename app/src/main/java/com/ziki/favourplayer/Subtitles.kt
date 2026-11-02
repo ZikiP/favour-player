@@ -91,8 +91,20 @@ object SubtitleDecoder {
 
 object SubtitleParser {
 
-    private val htmlTag = Regex("""</?[a-zA-Z][^>]*>""")
-    private val assTag = Regex("""\{\\[^}]*}""")
+    /**
+     * 正则一律走这里编译并吞掉异常。
+     * 踩过的坑：`\{\\[^}]*}` 在 JVM 上合法，在 Android 的 ICU 实现上却抛
+     * PatternSyntaxException；而它写在 object 的初始化里，会让整个
+     * SubtitleParser 初始化失败（ExceptionInInitializerError），
+     * 结果是**所有格式的字幕都加载不了**，且错误信息为空。
+     */
+    private fun safeRegex(pattern: String): Regex? =
+        runCatching { Regex(pattern) }
+            .onFailure { Log.w("FavourPlayer", "regex failed: $pattern", it) }
+            .getOrNull()
+
+    private val htmlTag: Regex? = safeRegex("""</?[a-zA-Z][^>]*>""")
+    private val assTag: Regex? = safeRegex("""\{\\[^{}]*\}""")
     private val blankLine = Regex("""\n\s*\n""")
     private val entities = mapOf(
         "&nbsp;" to " ",
@@ -192,7 +204,7 @@ object SubtitleParser {
     }
 
     private fun cleanAss(value: String): String {
-        val stripped = assTag.replace(value, "")
+        val stripped = (assTag?.replace(value, "") ?: value)
             .replace("\\N", "\n")
             .replace("\\n", "\n")
             .replace("\\h", " ")
@@ -216,8 +228,8 @@ object SubtitleParser {
     }
 
     private fun clean(value: String): String {
-        var text = assTag.replace(value, "")
-        text = htmlTag.replace(text, "")
+        var text = assTag?.replace(value, "") ?: value
+        text = htmlTag?.replace(text, "") ?: text
         for ((from, to) in entities) text = text.replace(from, to)
         return text.lines()
             .joinToString("\n") { it.trim() }

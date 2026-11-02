@@ -16,6 +16,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -97,10 +98,6 @@ fun PlayerScreen(
     } else {
         playerPrefs.controlBottomPortrait
     }
-    val subtitleClearance = minOf(
-        154 + controlBottomDp,
-        (configuration.screenHeightDp * 0.55f).toInt(),
-    )
     var subtitleStyle by remember { mutableStateOf(subtitleStyleStore.load(contentKey)) }
     var showSubtitleSettings by remember { mutableStateOf(false) }
 
@@ -161,9 +158,13 @@ fun PlayerScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var qualities by remember { mutableStateOf<List<QualityOption>>(emptyList()) }
     var selectedHeight by remember { mutableIntStateOf(-1) }
+    // 视频画面比例，用来把字幕贴到画面底边而不是屏幕底边
+    var videoAspect by remember { mutableFloatStateOf(16f / 9f) }
 
     fun saveProgress() {
         if (contentKey.isBlank()) return
+        // 干净模式不留下任何观看痕迹
+        if (CleanMode.enabled) return
         val duration = player.duration
         val position = player.currentPosition
         if (duration > 0L && position > 0L && player.playbackState != Player.STATE_ENDED) {
@@ -176,6 +177,7 @@ fun PlayerScreen(
         resumed = true
         val value = player.duration
         if (value > 0L) durationMs = value
+        if (CleanMode.enabled) return
         if (fromStart) {
             playbackStore.clear(contentKey)
         } else if (contentKey.isNotBlank()) {
@@ -244,6 +246,13 @@ fun PlayerScreen(
                 Log.i("FavourPlayer", "tracks=${qualities.joinToString { it.label }}")
                 val value = player.duration
                 if (value > 0L) durationMs = value
+            }
+
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                val rotated = videoSize.unappliedRotationDegrees % 180 != 0
+                val width = if (rotated) videoSize.height else videoSize.width
+                val height = if (rotated) videoSize.width else videoSize.height
+                if (width > 0 && height > 0) videoAspect = width.toFloat() / height
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -413,7 +422,15 @@ fun PlayerScreen(
     }
     val subtitle = hostOf(stream.pageUrl)
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+        // PlayerView 用 RESIZE_MODE_FIT，画面按比例居中，四周留黑边。
+        // 字幕要贴在画面底边而不是屏幕底边，所以先算出画面高度和下边黑边。
+        val displayHeight = if (maxWidth / maxHeight > videoAspect) {
+            maxHeight
+        } else {
+            maxWidth / videoAspect
+        }
+        val bottomLetterbox = (maxHeight - displayHeight) / 2
         AndroidView(
             factory = { viewContext ->
                 val attached = player
@@ -594,19 +611,26 @@ fun PlayerScreen(
         }
 
         caption?.let { track ->
+            // 横屏画面高，字号跟着放大一点，否则在手机上看着偏小
+            val displayStyle = if (isLandscape) {
+                subtitleStyle.copy(
+                    fontSize = (subtitleStyle.fontSize * 1.2f).coerceAtMost(SubtitleStyle.FONT_MAX),
+                )
+            } else {
+                subtitleStyle
+            }
             SubtitleOverlay(
                 track = track,
                 positionMs = previewMs ?: positionMs,
-                style = subtitleStyle,
+                style = displayStyle,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = 24.dp)
+                    // 固定贴在视频画面底边，控件弹出与否都不移动。
+                    // 竖屏画面窄，字幕几乎压着画面下沿；横屏留一点离底距离。
                     .padding(
-                        bottom = if (controlsVisible && !locked) {
-                            subtitleClearance.dp
-                        } else {
-                            (26 + subtitleStyle.extraBottomDp()).dp
-                        },
+                        bottom = bottomLetterbox +
+                            ((if (isLandscape) 24 else -10) + subtitleStyle.extraBottomDp()).dp,
                     ),
             )
         }
@@ -630,6 +654,8 @@ fun PlayerScreen(
                 },
                 onOpenSubtitleSettings = { showSubtitleSettings = true },
                 controlBottom = controlBottomDp,
+                // 竖屏状态栏隐藏着，顶部栏要自己往下让一让，不然贴着屏幕边
+                topPadding = if (isLandscape) 14.dp else 42.dp,
                 onTogglePlay = {
                     if (player.isPlaying) player.pause() else player.play()
                     touch()

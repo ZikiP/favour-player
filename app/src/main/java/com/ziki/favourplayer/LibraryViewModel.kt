@@ -7,6 +7,7 @@ import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
@@ -49,21 +50,40 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     init {
         val pull = store.loadPullConfig()
         val cached = store.loadCached()
+        val clean = CleanMode.enabled
         state = LibraryUiState(
-            snapshot = cached,
-            lastReceivedAt = cached?.updatedAt,
+            snapshot = if (clean) null else cached,
+            lastReceivedAt = if (clean) null else cached?.updatedAt,
             pullUrl = pull.url,
             pullToken = pull.token,
-            playback = playbackStore.all(),
+            playback = if (clean) emptyMap() else playbackStore.all(),
         )
 
         viewModelScope.launch {
             SyncBus.snapshots.collect { snapshot ->
+                if (CleanMode.enabled) return@collect
                 state = state.copy(
                     snapshot = snapshot,
                     lastReceivedAt = snapshot.updatedAt,
                     pullError = null,
                 )
+            }
+        }
+
+        // 干净模式开关变化：打开就清空内存里的收藏和进度，关闭再恢复
+        viewModelScope.launch {
+            snapshotFlow { CleanMode.enabled }.collect { clean ->
+                if (clean) {
+                    state = state.copy(snapshot = null, lastReceivedAt = null, playback = emptyMap())
+                } else {
+                    val restored = store.loadCached()
+                    state = state.copy(
+                        snapshot = restored,
+                        lastReceivedAt = restored?.updatedAt,
+                        playback = playbackStore.all(),
+                    )
+                    pullNow(auto = true)
+                }
             }
         }
 
@@ -85,6 +105,8 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun pullNow(auto: Boolean = false) {
         if (pullJob?.isActive == true) return
+        // 干净模式不碰中间服务：连拉取都不发生
+        if (CleanMode.enabled) return
 
         val now = System.currentTimeMillis()
         if (auto && state.pullError == null && now - lastPullAttemptAt < AUTO_PULL_INTERVAL_MS) {

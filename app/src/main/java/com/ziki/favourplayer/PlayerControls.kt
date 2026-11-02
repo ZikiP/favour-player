@@ -77,6 +77,7 @@ fun PlayerControls(
     onRotate: () -> Unit,
     onSkipBack: () -> Unit,
     onSkipForward: () -> Unit,
+    topPadding: androidx.compose.ui.unit.Dp = 14.dp,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier) {
@@ -90,7 +91,7 @@ fun PlayerControls(
                     ),
                 )
                 .statusBarsPadding()
-                .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 10.dp),
+                .padding(start = 16.dp, end = 16.dp, top = topPadding, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             PlayerIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", onBack)

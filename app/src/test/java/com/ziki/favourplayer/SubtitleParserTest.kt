@@ -94,6 +94,20 @@ class SubtitleParserTest {
     }
 
     @Test
+    fun stripsAssTagsContainingBraces() {
+        // 带括号参数的 ASS 标签：{\pos(1,2)}，字符类里要排掉 } 才不会截断
+        val raw = """
+            [Events]
+            Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+            Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,{\pos(960,540)\fad(200,200)}居中的一句
+        """.trimIndent()
+
+        val cues = SubtitleParser.parse(raw)
+        assertEquals(1, cues.size)
+        assertEquals("居中的一句", cues[0].text)
+    }
+
+    @Test
     fun parsesLargeSrtLikeRealFansubFile() {
         val srt = buildString {
             for (i in 1..2400) {

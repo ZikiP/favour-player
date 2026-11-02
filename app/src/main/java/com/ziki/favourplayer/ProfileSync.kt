@@ -156,6 +156,8 @@ class ProfileException(message: String) : Exception(message)
 data class ProfileSummary(
     val deviceId: String,
     val label: String,
+    val customLabel: String,
+    val displayLabel: String,
     val updatedAt: Long,
 )
 
@@ -228,6 +230,31 @@ object ProfileClient {
         }
     }
 
+    /** 把某台设备的配置复制到另一台（一般是复制到本机）。 */
+    fun copy(config: PullConfig, sourceId: String, targetId: String) {
+        val base = baseOf(config)
+        val request = Request.Builder()
+            .url("$base/api/profiles/$sourceId/copy")
+            .header("Authorization", "Bearer ${config.token}")
+            .header("Content-Type", "application/json")
+            .post(
+                JSONObject().put("targetDeviceId", targetId).toString()
+                    .toRequestBody(JSON),
+            )
+            .build()
+        try {
+            PullClient.client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw ProfileException("复制失败：HTTP ${response.code}")
+                }
+            }
+        } catch (error: ProfileException) {
+            throw error
+        } catch (error: java.io.IOException) {
+            throw ProfileException(connectionMessage(error))
+        }
+    }
+
     fun delete(config: PullConfig, deviceId: String) {
         val base = baseOf(config)
         val request = Request.Builder()
@@ -273,6 +300,9 @@ object ProfileClient {
                             ProfileSummary(
                                 deviceId = deviceId,
                                 label = item.optString("label"),
+                                customLabel = item.optString("customLabel"),
+                                displayLabel = item.optString("displayLabel")
+                                    .ifBlank { item.optString("label") },
                                 updatedAt = item.optLong("updatedAt"),
                             ),
                         )
@@ -378,6 +408,12 @@ object ProfileSync {
     fun upload(context: Context, force: Boolean = false): Boolean {
         val appContext = context.applicationContext
         val prefs = prefs(appContext)
+        // 干净模式：偏好里有「按作品单独调过的字幕样式」，key 就是片源地址，
+        // 上传上去等于暴露看过哪些片，所以不推
+        if (CleanMode.enabled) {
+            Log.i(TAG, "profile upload skipped: clean mode")
+            return false
+        }
         val config = SyncStore(appContext).loadPullConfig()
         if (config.url.isBlank() || config.token.isBlank()) {
             prefs.edit().putString(KEY_LAST_ERROR, "未配置中间服务").apply()
@@ -392,8 +428,8 @@ object ProfileSync {
 
         val settings = SettingsBackup.collect(appContext)
         val hash = DeviceIdentity.sha256(settings.toString())
-        if (!force && hash == prefs.getString(KEY_LAST_HASH, null)) return true
-
+        // 即使内容没变也照常推一次：服务端的「同步于」要跟着这次动作走，
+        // 否则用户点了刷新却看到时间没变，会以为没同步上
         return try {
             ProfileClient.upload(
                 config = config,

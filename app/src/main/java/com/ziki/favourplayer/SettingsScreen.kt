@@ -87,6 +87,7 @@ fun SettingsScreen(
     var showControlPosition by remember { mutableStateOf(false) }
     var showSubtitleStyle by remember { mutableStateOf(false) }
     var showProfileSync by remember { mutableStateOf(false) }
+    var showVersion by remember { mutableStateOf(false) }
     val profileStatus = remember(showProfileSync) { ProfileSync.status(context) }
 
     Box(
@@ -246,6 +247,7 @@ fun SettingsScreen(
                     title = "版本",
                     subtitle = "中间服务拉取 · debug",
                     value = BuildConfig.VERSION_NAME,
+                    onClick = { showVersion = true },
                 )
             }
 
@@ -316,6 +318,8 @@ fun SettingsScreen(
             )
         } else if (showProfileSync) {
             ProfileSyncPage(onBack = { showProfileSync = false })
+        } else if (showVersion) {
+            VersionPage(onBack = { showVersion = false })
         }
     }
 }

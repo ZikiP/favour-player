@@ -10,7 +10,7 @@ import java.net.URI
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 
-data class PullResult(val snapshot: LibrarySnapshot)
+data class PullResult(val snapshot: LibrarySnapshot, val cleanMode: Boolean = false)
 
 data class PullTestResult(val count: Int)
 
@@ -55,14 +55,28 @@ object PullClient {
                 runCatching { SnapshotParser.parse(raw) }
                     .getOrElse { throw PullException("中间服务数据格式不正确") }
 
-                val saved = try {
-                    SyncStore(context).saveSnapshot(raw)
-                } catch (error: Throwable) {
-                    throw PullException("保存快照失败")
+                // 服务端的全局干净模式：任一端开启，所有端都看不到收藏
+                val cleanMode = runCatching {
+                    JSONObject(raw).optBoolean("cleanMode")
+                }.getOrDefault(false)
+                CleanMode.setRemote(cleanMode)
+
+                val saved = if (cleanMode) {
+                    // 干净模式返回的是空快照，别拿它把本地缓存覆盖掉
+                    SnapshotParser.parse(raw)
+                } else {
+                    try {
+                        SyncStore(context).saveSnapshot(raw)
+                    } catch (error: Throwable) {
+                        throw PullException("保存快照失败")
+                    }
                 }
                 CoverCache.prefetch(context, saved.items.map { it.cover })
                 SyncBus.publishSnapshot(saved)
-                return PullResult(saved)
+                // 同一次「同步」里把本机偏好也推上去。
+                // 放在这里同步等完成，网页的「同步于」才会立刻变成当前时间。
+                runCatching { ProfileSync.upload(context) }
+                return PullResult(saved, cleanMode)
             }
         } catch (error: PullException) {
             throw error

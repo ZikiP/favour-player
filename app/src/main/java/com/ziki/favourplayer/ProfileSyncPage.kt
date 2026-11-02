@@ -15,7 +15,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,15 +51,29 @@ fun ProfileSyncPage(onBack: () -> Unit) {
         status = ProfileSync.status(context)
     }
 
-    fun run(block: () -> String) {
+    // 服务端上的设备列表，和网页的设备管理页看到的是同一份数据
+    var remoteDevices by remember { mutableStateOf<List<ProfileSummary>>(emptyList()) }
+
+    suspend fun loadRemote(): List<ProfileSummary> {
+        val config = SyncStore(context).loadPullConfig()
+        if (config.url.isBlank() || config.token.isBlank()) return emptyList()
+        return runCatching { ProfileClient.list(config) }.getOrDefault(emptyList())
+    }
+
+    fun run(block: suspend () -> String) {
         if (busy) return
         scope.launch {
             busy = true
             val text = withContext(Dispatchers.IO) { block() }
             message = text
+            remoteDevices = loadRemote()
             busy = false
             refresh()
         }
+    }
+
+    LaunchedEffect(Unit) {
+        remoteDevices = loadRemote()
     }
 
     SubPage(
@@ -205,6 +221,82 @@ fun ProfileSyncPage(onBack: () -> Unit) {
             fontSize = 10.5.sp,
             lineHeight = 16.sp,
         )
+
+        if (remoteDevices.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(PlayerColors.Panel, RoundedCornerShape(14.dp))
+                    .border(1.dp, PlayerColors.Border, RoundedCornerShape(14.dp))
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    text = "服务端上的设备 · ${remoteDevices.size}",
+                    color = PlayerColors.Text,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                remoteDevices.forEach { device ->
+                    val isSelf = device.deviceId == status.deviceId
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = device.displayLabel.ifBlank { device.deviceId.take(8) },
+                                color = PlayerColors.Text,
+                                fontSize = 12.5.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = "${device.deviceId.take(10)} · ${formatProfileTime(device.updatedAt)}",
+                                color = PlayerColors.Faint,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        if (isSelf) {
+                            Text(
+                                text = "本机",
+                                color = PlayerColors.Accent,
+                                fontSize = 11.5.sp,
+                            )
+                        } else {
+                            TextButton(
+                                onClick = {
+                                    run {
+                                        val config = SyncStore(context).loadPullConfig()
+                                        ProfileClient.copy(config, device.deviceId, status.deviceId)
+                                        "已复制到本机，回到上一页后点「从服务端恢复」生效"
+                                    }
+                                },
+                                enabled = !busy,
+                            ) {
+                                Text("复制到本机", color = PlayerColors.Accent, fontSize = 12.sp)
+                            }
+                            TextButton(
+                                onClick = {
+                                    run {
+                                        val config = SyncStore(context).loadPullConfig()
+                                        ProfileClient.delete(config, device.deviceId)
+                                        "已删除 ${device.displayLabel}"
+                                    }
+                                },
+                                enabled = !busy,
+                            ) {
+                                Text("删除", color = PlayerColors.Danger, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
