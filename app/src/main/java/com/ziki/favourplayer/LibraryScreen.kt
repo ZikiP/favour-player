@@ -906,7 +906,7 @@ private fun ActressesContent(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(150.dp),
+        columns = GridCells.Adaptive(96.dp),
         state = gridState,
         modifier = modifier,
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),

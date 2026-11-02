@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -92,7 +93,7 @@ class CardScreenshotTest {
                         color = PlayerColors.Muted,
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Box(Modifier.weight(1f)) {
+                        Box(Modifier.width(100.dp)) {
                             ActressCard(
                                 name = first.actressNames().first(),
                                 count = 12,
@@ -102,7 +103,7 @@ class CardScreenshotTest {
                                 onClick = {},
                             )
                         }
-                        Box(Modifier.weight(1f)) {
+                        Box(Modifier.width(100.dp)) {
                             ActressCard(
                                 name = "头像加载失败",
                                 count = 3,

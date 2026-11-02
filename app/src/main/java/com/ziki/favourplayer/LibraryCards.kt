@@ -335,9 +335,9 @@ fun ActressCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(PlayerColors.Panel)
-            .border(1.dp, PlayerColors.Border, RoundedCornerShape(16.dp))
+            .border(1.dp, PlayerColors.Border, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick),
     ) {
         Box(
@@ -351,7 +351,7 @@ fun ActressCard(
                 text = name.take(1).uppercase(),
                 color = Color.hsv(hue, 0.42f, 0.86f),
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 30.sp,
+                fontSize = 23.sp,
             )
             if (avatar.isNotBlank()) {
                 AsyncImage(
@@ -366,8 +366,8 @@ fun ActressCard(
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .size(22.dp)
+                        .padding(5.dp)
+                        .size(18.dp)
                         .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.46f)),
                     contentAlignment = Alignment.Center,
@@ -376,16 +376,16 @@ fun ActressCard(
                         imageVector = Icons.Rounded.Favorite,
                         contentDescription = "喜爱的演员",
                         tint = PlayerColors.Fav,
-                        modifier = Modifier.size(12.dp),
+                        modifier = Modifier.size(10.dp),
                     )
                 }
             }
         }
-        Column(Modifier.padding(horizontal = 11.dp, vertical = 9.dp)) {
+        Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
             Text(
                 text = name,
                 color = PlayerColors.Text,
-                fontSize = 13.sp,
+                fontSize = 11.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -393,8 +393,8 @@ fun ActressCard(
             Text(
                 text = "$count 部作品",
                 color = PlayerColors.Muted,
-                fontSize = 10.5.sp,
-                modifier = Modifier.padding(top = 2.dp),
+                fontSize = 9.5.sp,
+                modifier = Modifier.padding(top = 1.dp),
             )
         }
     }
