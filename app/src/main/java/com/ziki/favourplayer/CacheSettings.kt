@@ -1,7 +1,7 @@
 package com.ziki.favourplayer
 
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,7 +18,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,7 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,14 +44,12 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.Locale
+import java.io.File
 
-private val CACHE_SIZES = listOf(
-    512L * 1024 * 1024 to "512 MB",
-    1L * 1024 * 1024 * 1024 to "1 GB",
-    2L * 1024 * 1024 * 1024 to "2 GB",
-    4L * 1024 * 1024 * 1024 to "4 GB",
-    8L * 1024 * 1024 * 1024 to "8 GB",
+private data class SnapshotInfo(
+    val items: Int,
+    val bytes: Long,
+    val updatedAt: Long,
 )
 
 @Composable
@@ -62,12 +58,23 @@ fun CacheSettingsDialog(onDismiss: () -> Unit) {
     val store = remember { CacheStore(context) }
     val scope = rememberCoroutineScope()
     var config by remember { mutableStateOf(store.load()) }
-    var usage by remember { mutableStateOf<CacheUsage?>(null) }
+    var coverUsage by remember { mutableStateOf<CacheUsage?>(null) }
+    var videoUsage by remember { mutableStateOf<CacheUsage?>(null) }
+    var snapshotInfo by remember { mutableStateOf<SnapshotInfo?>(null) }
     var reload by remember { mutableIntStateOf(0) }
-    var busy by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(config, reload) {
-        usage = withContext(Dispatchers.IO) { MediaCache.usage(context) }
+    LaunchedEffect(reload) {
+        coverUsage = withContext(Dispatchers.IO) { CoverCache.usage(context) }
+        videoUsage = withContext(Dispatchers.IO) { MediaCache.usage(context) }
+        snapshotInfo = withContext(Dispatchers.IO) {
+            val cached = SyncStore(context).loadCached()
+            SnapshotInfo(
+                items = cached?.items?.size ?: 0,
+                bytes = File(context.filesDir, "snapshot.json").length(),
+                updatedAt = cached?.updatedAt ?: 0L,
+            )
+        }
     }
 
     Dialog(
@@ -78,7 +85,7 @@ fun CacheSettingsDialog(onDismiss: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth(0.94f)
                 .widthIn(max = 560.dp)
-                .heightIn(max = 680.dp),
+                .heightIn(max = 720.dp),
             shape = RoundedCornerShape(18.dp),
             color = PlayerColors.Panel,
             border = BorderStroke(1.dp, PlayerColors.Border),
@@ -105,53 +112,158 @@ fun CacheSettingsDialog(onDismiss: () -> Unit) {
                     color = PlayerColors.Text,
                 )
                 Text(
-                    text = "视频分片缓存用于复用已加载内容、减少重复下载；不保证完整离线。",
+                    text = "收藏文字、封面和视频片段可分别缓存；封面与视频的大小、位置可调。",
                     style = MaterialTheme.typography.bodySmall,
                     color = PlayerColors.Muted,
                 )
+
+                Text(
+                    text = "收藏信息",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = PlayerColors.Text,
+                )
+                Text(
+                    text = "标题、编号、演员、标签、最爱等文字已保存在本机，离线时仍可浏览、搜索和查看详情。",
+                    color = PlayerColors.Muted,
+                    fontSize = 12.5.sp,
+                )
+                val info = snapshotInfo
+                Text(
+                    text = when {
+                        info == null -> "读取中…"
+                        info.items == 0 -> "尚无本地收藏，等插件推送一次即可离线查看。"
+                        else -> "${info.items} 条 · ${formatBytes(info.bytes)}" +
+                            if (info.updatedAt > 0) " · 更新于 ${formatCacheTime(info.updatedAt)}" else ""
+                    },
+                    color = PlayerColors.Faint,
+                    fontSize = 11.5.sp,
+                )
+                Text(
+                    text = "文字体积很小，固定保存在应用私有目录，不随下面的存储位置变化。",
+                    color = PlayerColors.Faint,
+                    fontSize = 11.sp,
+                )
+
+                SectionDivider()
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("开启视频缓存", color = PlayerColors.Text, fontSize = 14.sp)
+                        Text("缓存封面", color = PlayerColors.Text, fontSize = 14.sp)
                         Text(
-                            "关闭后每次播放都重新下载。",
+                            "同步后自动缓存，离线也能看到封面。",
                             color = PlayerColors.Faint,
                             fontSize = 11.5.sp,
                         )
                     }
                     Switch(
-                        checked = config.enabled,
-                        onCheckedChange = { config = config.copy(enabled = it) },
+                        checked = config.coverEnabled,
+                        onCheckedChange = { config = config.copy(coverEnabled = it) },
                     )
                 }
-
-                Text(
-                    text = "最大缓存",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = PlayerColors.Text,
+                SizeChips(
+                    label = "封面缓存上限",
+                    sizes = COVER_CACHE_SIZES,
+                    selected = config.coverMaxBytes,
+                    onSelect = { config = config.copy(coverMaxBytes = it) },
                 )
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    CACHE_SIZES.forEach { (bytes, label) ->
-                        FilterChip(
-                            selected = config.maxBytes == bytes,
-                            onClick = { config = config.copy(maxBytes = bytes) },
-                            label = { Text(label) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = PlayerColors.Accent,
-                                selectedLabelColor = PlayerColors.AccentInk,
-                            ),
+                UsageText(
+                    usage = coverUsage,
+                    maxBytes = config.coverMaxBytes,
+                    unit = "张",
+                    enabled = config.coverEnabled,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = {
+                            if (store.load().coverEnabled) {
+                                CoverCache.prefetchCached(context)
+                                Toast.makeText(context, "已开始缓存封面", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "请先保存开启封面缓存", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        enabled = config.coverEnabled && (info?.items ?: 0) > 0,
+                    ) {
+                        Text("缓存全部封面", color = PlayerColors.Accent)
+                    }
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                busy = "cover"
+                                withContext(Dispatchers.IO) { CoverCache.clear(context) }
+                                reload += 1
+                                busy = null
+                            }
+                        },
+                        enabled = busy == null,
+                    ) {
+                        Text(
+                            if (busy == "cover") "清理中…" else "清理封面",
+                            color = PlayerColors.Danger,
                         )
                     }
                 }
 
+                SectionDivider()
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("缓存视频片段", color = PlayerColors.Text, fontSize = 14.sp)
+                        Text(
+                            "复用已加载的 HLS 分片，减少重复下载。",
+                            color = PlayerColors.Faint,
+                            fontSize = 11.5.sp,
+                        )
+                    }
+                    Switch(
+                        checked = config.videoEnabled,
+                        onCheckedChange = { config = config.copy(videoEnabled = it) },
+                    )
+                }
+                SizeChips(
+                    label = "视频缓存上限",
+                    sizes = VIDEO_CACHE_SIZES,
+                    selected = config.videoMaxBytes,
+                    onSelect = { config = config.copy(videoMaxBytes = it) },
+                )
+                UsageText(
+                    usage = videoUsage,
+                    maxBytes = config.videoMaxBytes,
+                    unit = "项",
+                    enabled = config.videoEnabled,
+                )
                 Text(
-                    text = "存储位置",
+                    text = "只缓存播放过的片段，不保证完整离线；解析页面仍需网络。",
+                    color = PlayerColors.Faint,
+                    fontSize = 11.sp,
+                )
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            busy = "video"
+                            withContext(Dispatchers.IO) { MediaCache.clear(context) }
+                            reload += 1
+                            busy = null
+                        }
+                    },
+                    enabled = busy == null,
+                ) {
+                    Text(
+                        if (busy == "video") "清理中…" else "清理视频",
+                        color = PlayerColors.Danger,
+                    )
+                }
+
+                SectionDivider()
+
+                Text(
+                    text = "存储位置（封面 + 视频）",
                     style = MaterialTheme.typography.labelLarge,
                     color = PlayerColors.Text,
                 )
@@ -160,37 +272,17 @@ fun CacheSettingsDialog(onDismiss: () -> Unit) {
                         selected = config.location == CACHE_LOCATION_INTERNAL,
                         onClick = { config = config.copy(location = CACHE_LOCATION_INTERNAL) },
                         label = { Text("内部存储") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = PlayerColors.Accent,
-                            selectedLabelColor = PlayerColors.AccentInk,
-                        ),
+                        colors = selectedChipColors(),
                     )
                     FilterChip(
                         selected = config.location == CACHE_LOCATION_EXTERNAL,
                         onClick = { config = config.copy(location = CACHE_LOCATION_EXTERNAL) },
                         label = { Text("外部存储") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = PlayerColors.Accent,
-                            selectedLabelColor = PlayerColors.AccentInk,
-                        ),
+                        colors = selectedChipColors(),
                     )
                 }
-
-                val current = usage
                 Text(
-                    text = "已用 ${formatBytes(current?.usedBytes ?: 0)} / " +
-                        "上限 ${formatBytes(config.maxBytes)} · ${current?.entries ?: 0} 项",
-                    color = PlayerColors.Muted,
-                    fontSize = 12.5.sp,
-                )
-                Text(
-                    text = current?.path ?: CacheStore.cacheDir(context, config.location).absolutePath,
-                    color = PlayerColors.Faint,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 10.5.sp,
-                )
-                Text(
-                    text = "外部存储使用 App 专属缓存目录；卸载 App 时系统会一并清理。",
+                    text = "外部存储使用 App 专属缓存目录；卸载 App 时系统会一并清理。更换位置会清空旧位置的缓存。",
                     color = PlayerColors.Faint,
                     fontSize = 11.sp,
                 )
@@ -201,8 +293,10 @@ fun CacheSettingsDialog(onDismiss: () -> Unit) {
                 ) {
                     Button(
                         onClick = {
+                            val previous = store.load()
                             store.save(config)
-                            MediaCache.release()
+                            CoverCache.onConfigChanged(context, previous.location)
+                            MediaCache.onConfigChanged(context, previous.location)
                             onDismiss()
                         },
                         shape = RoundedCornerShape(10.dp),
@@ -213,37 +307,14 @@ fun CacheSettingsDialog(onDismiss: () -> Unit) {
                     ) {
                         Text("保存")
                     }
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                busy = true
-                                withContext(Dispatchers.IO) { MediaCache.clear(context) }
-                                reload += 1
-                                busy = false
-                            }
-                        },
-                        enabled = !busy,
-                    ) {
-                        Text(if (busy) "清理中…" else "清理缓存", color = PlayerColors.Danger)
-                    }
+                    Text(
+                        text = "保存后立即生效",
+                        color = PlayerColors.Faint,
+                        fontSize = 11.sp,
+                    )
                 }
             }
         }
     }
 }
 
-private fun formatBytes(bytes: Long): String {
-    if (bytes <= 0L) return "0 B"
-    val units = arrayOf("B", "KB", "MB", "GB", "TB")
-    var value = bytes.toDouble()
-    var index = 0
-    while (value >= 1024 && index < units.lastIndex) {
-        value /= 1024
-        index += 1
-    }
-    return if (index == 0) {
-        "${bytes.toLong()} ${units[index]}"
-    } else {
-        String.format(Locale.US, "%.1f %s", value, units[index])
-    }
-}

@@ -50,10 +50,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil.ImageLoader
 import coil.compose.AsyncImage
 
 @Composable
-fun ItemCard(item: LibraryItem, onOpen: () -> Unit, onPlay: () -> Unit) {
+fun ItemCard(
+    item: LibraryItem,
+    imageLoader: ImageLoader,
+    onOpen: () -> Unit,
+    onPlay: () -> Unit,
+) {
     val code = item.extra("code")?.value.orEmpty()
     val actress = item.extra("actress")?.value.orEmpty()
     val date = item.extra("releaseDate")?.value.orEmpty()
@@ -80,6 +86,7 @@ fun ItemCard(item: LibraryItem, onOpen: () -> Unit, onPlay: () -> Unit) {
                 if (item.cover.isNotBlank()) {
                     AsyncImage(
                         model = item.cover,
+                        imageLoader = imageLoader,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
@@ -211,7 +218,12 @@ fun ActressCard(name: String, count: Int, onClick: () -> Unit) {
 }
 
 @Composable
-fun ItemDetailDialog(item: LibraryItem, onDismiss: () -> Unit, onPlay: () -> Unit) {
+fun ItemDetailDialog(
+    item: LibraryItem,
+    imageLoader: ImageLoader,
+    onDismiss: () -> Unit,
+    onPlay: () -> Unit,
+) {
     val context = LocalContext.current
     val code = item.extra("code")?.value.orEmpty()
     val meta = listOf(
@@ -257,7 +269,7 @@ fun ItemDetailDialog(item: LibraryItem, onDismiss: () -> Unit, onPlay: () -> Uni
                     }
                     if (wide) {
                         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            DetailCover(item, code, Modifier.width(220.dp))
+                            DetailCover(item, code, imageLoader, Modifier.width(220.dp))
                             DetailInfo(
                                 item = item,
                                 code = code,
@@ -269,7 +281,7 @@ fun ItemDetailDialog(item: LibraryItem, onDismiss: () -> Unit, onPlay: () -> Uni
                         }
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                            DetailCover(item, code, Modifier.fillMaxWidth())
+                            DetailCover(item, code, imageLoader, Modifier.fillMaxWidth())
                             DetailInfo(
                                 item = item,
                                 code = code,
@@ -287,7 +299,12 @@ fun ItemDetailDialog(item: LibraryItem, onDismiss: () -> Unit, onPlay: () -> Uni
 }
 
 @Composable
-private fun DetailCover(item: LibraryItem, code: String, modifier: Modifier = Modifier) {
+private fun DetailCover(
+    item: LibraryItem,
+    code: String,
+    imageLoader: ImageLoader,
+    modifier: Modifier = Modifier,
+) {
     Box(
         modifier = modifier
             .aspectRatio(3f / 2f)
@@ -301,6 +318,7 @@ private fun DetailCover(item: LibraryItem, code: String, modifier: Modifier = Mo
         if (item.cover.isNotBlank()) {
             AsyncImage(
                 model = item.cover,
+                imageLoader = imageLoader,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

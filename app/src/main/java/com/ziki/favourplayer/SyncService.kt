@@ -25,12 +25,18 @@ class SyncService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val config = store.loadConfig()
+        if (store.loadMode() == SYNC_MODE_PULL) {
+            // A sticky restart can arrive after the user switched to pull mode.
+            startForegroundCompat(config.copy(enabled = false))
+            stopSelf()
+            return START_NOT_STICKY
+        }
         startForegroundCompat(config)
 
         server?.stop()
         server = null
         if (config.enabled) {
-            server = SyncServer(store, config).also { it.start() }
+            server = SyncServer(this, store, config).also { it.start() }
         }
         return START_STICKY
     }

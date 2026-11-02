@@ -1,5 +1,6 @@
 package com.ziki.favourplayer
 
+import android.content.Context
 import android.util.Log
 import org.json.JSONObject
 import java.io.BufferedInputStream
@@ -12,6 +13,7 @@ import java.nio.charset.StandardCharsets
 import java.util.Locale
 
 class SyncServer(
+    private val context: Context,
     private val store: SyncStore,
     private val config: ReceiveConfig,
 ) {
@@ -110,6 +112,7 @@ class SyncServer(
                             return
                         }
                         SyncBus.publishSnapshot(snapshot)
+                        CoverCache.prefetchCached(context)
                         val body = JSONObject()
                             .put("ok", true)
                             .put("count", snapshot.items.size)

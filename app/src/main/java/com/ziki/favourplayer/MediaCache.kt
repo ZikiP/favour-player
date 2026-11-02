@@ -14,11 +14,11 @@ object MediaCache {
     private val lock = Any()
     private var cache: SimpleCache? = null
     private var databaseProvider: StandaloneDatabaseProvider? = null
-    private var activeConfig: CacheConfig? = null
+    private var activeKey: String? = null
 
     fun dataSourceFactory(context: Context, upstream: DataSource.Factory): DataSource.Factory {
         val config = CacheStore(context).load()
-        if (!config.enabled) return upstream
+        if (!config.videoEnabled) return upstream
         val simpleCache = synchronized(lock) { ensure(context, config) } ?: return upstream
         return CacheDataSource.Factory()
             .setCache(simpleCache)
@@ -28,26 +28,34 @@ object MediaCache {
 
     fun usage(context: Context): CacheUsage {
         val config = CacheStore(context).load()
-        val dir = CacheStore.cacheDir(context, config.location)
-        val simpleCache = if (config.enabled) {
+        val dir = CacheStore.videoDir(context, config.location)
+        val simpleCache = if (config.videoEnabled) {
             synchronized(lock) { ensure(context, config) }
         } else {
             null
         }
         return CacheUsage(
-            enabled = config.enabled,
+            enabled = config.videoEnabled,
             usedBytes = simpleCache?.cacheSpace ?: dirLength(dir),
-            maxBytes = config.maxBytes,
+            maxBytes = config.videoMaxBytes,
             entries = simpleCache?.keys?.size ?: 0,
             path = dir.absolutePath,
         )
     }
 
+    fun onConfigChanged(context: Context, previousLocation: String) {
+        synchronized(lock) { releaseLocked() }
+        val config = CacheStore(context).load()
+        if (previousLocation != config.location) {
+            runCatching { CacheStore.videoDir(context, previousLocation).deleteRecursively() }
+        }
+    }
+
     fun clear(context: Context) {
         synchronized(lock) {
             releaseLocked()
-            CacheStore.cacheDir(context, CACHE_LOCATION_INTERNAL).deleteRecursively()
-            CacheStore.cacheDir(context, CACHE_LOCATION_EXTERNAL).deleteRecursively()
+            CacheStore.videoDir(context, CACHE_LOCATION_INTERNAL).deleteRecursively()
+            CacheStore.videoDir(context, CACHE_LOCATION_EXTERNAL).deleteRecursively()
         }
     }
 
@@ -56,21 +64,21 @@ object MediaCache {
     }
 
     private fun ensure(context: Context, config: CacheConfig): SimpleCache? {
-        if (cache != null && activeConfig == config) return cache
+        if (cache != null && activeKey == config.videoKey) return cache
 
         releaseLocked()
-        val dir = CacheStore.cacheDir(context, config.location)
+        val dir = CacheStore.videoDir(context, config.location)
         dir.mkdirs()
         val provider = StandaloneDatabaseProvider(context)
         return try {
             val created = SimpleCache(
                 dir,
-                LeastRecentlyUsedCacheEvictor(config.maxBytes),
+                LeastRecentlyUsedCacheEvictor(config.videoMaxBytes),
                 provider,
             )
             cache = created
             databaseProvider = provider
-            activeConfig = config
+            activeKey = config.videoKey
             created
         } catch (error: Throwable) {
             Log.e("FavourPlayer", "media cache init failed", error)
@@ -84,7 +92,7 @@ object MediaCache {
         cache = null
         runCatching { databaseProvider?.close() }
         databaseProvider = null
-        activeConfig = null
+        activeKey = null
     }
 
     private fun dirLength(dir: File): Long =

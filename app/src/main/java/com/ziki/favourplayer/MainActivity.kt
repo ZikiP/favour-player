@@ -9,9 +9,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.WindowCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModelProvider
 
 class MainActivity : ComponentActivity() {
+
+    private lateinit var libraryModel: LibraryViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -21,7 +23,10 @@ class MainActivity : ComponentActivity() {
             isAppearanceLightNavigationBars = false
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        libraryModel = ViewModelProvider(this)[LibraryViewModel::class.java]
+
+        if (libraryModel.state.mode != SYNC_MODE_PULL &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
         ) {
@@ -29,16 +34,19 @@ class MainActivity : ComponentActivity() {
         }
 
         sharedUrl(intent)?.let { openPlayer(it) }
-
         setContent {
             FavourPlayerTheme {
-                val model: LibraryViewModel = viewModel()
                 LibraryScreen(
-                    viewModel = model,
+                    viewModel = libraryModel,
                     onPlay = { openPlayer(it) },
                 )
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::libraryModel.isInitialized) libraryModel.onForeground()
     }
 
     override fun onNewIntent(intent: Intent) {

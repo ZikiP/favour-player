@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -73,6 +74,8 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
     var showCache by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val ruleStore = remember { RuleStore(context) }
+    val coverRevision = CoverCache.revision
+    val coverLoader = remember(coverRevision) { CoverCache.imageLoader(context) }
 
     val items = state.snapshot?.items.orEmpty()
     val actressStats = remember(items) { buildActressStats(items) }
@@ -96,8 +99,9 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
                 state = state,
                 onSettings = { showSettings = true },
                 onManual = { showManual = true },
+                onRefresh = { viewModel.pullNow() },
             )
-            if (serverError != null) {
+            if (serverError != null && state.mode != SYNC_MODE_PULL) {
                 ServerBanner(
                     message = serverError,
                     onSettings = { showSettings = true },
@@ -152,12 +156,12 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
                             modifier = Modifier.weight(1f),
                             title = if (query.isBlank()) "还没有演员信息" else "没有匹配的演员",
                             message = when {
-                                items.isEmpty() -> "等待插件推送后会自动汇总。"
+                                items.isEmpty() -> "拉取或接收到收藏后会自动汇总。"
                                 query.isBlank() -> "收藏带演员字段的作品后会自动汇总到这里。"
                                 else -> "换个关键词试试。"
                             },
                             actionLabel = when {
-                                items.isEmpty() -> "查看接收设置"
+                                items.isEmpty() -> "查看同步设置"
                                 query.isNotBlank() -> "清除搜索"
                                 else -> null
                             },
@@ -197,17 +201,21 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
                 filtered.isEmpty() -> EmptyState(
                     modifier = Modifier.weight(1f),
                     title = when {
+                        items.isEmpty() && state.mode == SYNC_MODE_PULL -> "等待从中间服务拉取"
                         items.isEmpty() -> "等待插件推送"
                         tab == "favorites" -> "还没有最爱的作品"
                         else -> "没有匹配的收藏"
                     },
                     message = when {
-                        items.isEmpty() -> "在 Favour 扩展 → 手机同步里，填入 App 设置显示的接收地址和令牌，然后点立即同步。"
+                        items.isEmpty() && state.mode == SYNC_MODE_PULL ->
+                            "在设置里填写中间服务的地址和令牌；手机与中间服务在同一 Tailscale 网络时即可拉取。"
+                        items.isEmpty() ->
+                            "在 Favour 扩展 → 同步设置里填入接收地址和令牌，或改用中间服务拉取。"
                         tab == "favorites" -> "在桌面端卡片上点爱心加入最爱。"
                         else -> "换个关键词或清除筛选再试试。"
                     },
                     actionLabel = when {
-                        items.isEmpty() -> "查看接收设置"
+                        items.isEmpty() -> "查看同步设置"
                         tab == "favorites" -> "去收藏"
                         else -> "清除筛选"
                     },
@@ -232,6 +240,7 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
                     items(filtered, key = { it.id }) { item ->
                         ItemCard(
                             item = item,
+                            imageLoader = coverLoader,
                             onOpen = { detail = item },
                             onPlay = { onPlay(item.url) },
                         )
@@ -244,6 +253,7 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
     detail?.let { item ->
         ItemDetailDialog(
             item = item,
+            imageLoader = coverLoader,
             onDismiss = { detail = null },
             onPlay = {
                 detail = null
@@ -252,9 +262,9 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
         )
     }
     if (showSettings) {
-        ReceiveSettingsDialog(
+        SyncSettingsDialog(
             state = state,
-            onSave = viewModel::saveReceiveConfig,
+            onSave = viewModel::saveSyncSettings,
             onRegenerateToken = viewModel::regenerateToken,
             onRefreshAddresses = viewModel::refreshAddresses,
             onRules = {
@@ -293,6 +303,7 @@ private fun LibraryTopBar(
     state: LibraryUiState,
     onSettings: () -> Unit,
     onManual: () -> Unit,
+    onRefresh: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -316,11 +327,20 @@ private fun LibraryTopBar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        if (state.mode == SYNC_MODE_PULL) {
+            IconButton(onClick = onRefresh, enabled = !state.pulling) {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = "立即拉取",
+                    tint = if (state.pulling) PlayerColors.Faint else PlayerColors.Muted,
+                )
+            }
+        }
         IconButton(onClick = onManual) {
             Icon(Icons.Default.PlayArrow, contentDescription = "手动播放", tint = PlayerColors.Muted)
         }
         IconButton(onClick = onSettings) {
-            Icon(Icons.Default.Settings, contentDescription = "接收设置", tint = PlayerColors.Muted)
+            Icon(Icons.Default.Settings, contentDescription = "同步设置", tint = PlayerColors.Muted)
         }
     }
 }
@@ -560,14 +580,29 @@ private fun EmptyState(
     }
 }
 
-private fun statusText(state: LibraryUiState): String = when {
-    state.serverError != null -> "接收服务异常"
-    !state.enabled -> "接收已关闭"
-    state.serverRunning && state.lastReceivedAt != null ->
-        "接收中 · ${formatSyncTime(state.lastReceivedAt)}"
-    state.serverRunning -> "接收中 · 端口 ${state.port}"
-    state.lastReceivedAt != null -> "已停止 · ${formatSyncTime(state.lastReceivedAt)}"
-    else -> "等待插件推送"
+private fun statusText(state: LibraryUiState): String {
+    if (state.mode == SYNC_MODE_PULL) {
+        if (state.pullUrl.isBlank() || state.pullToken.isBlank()) return "等待配置中间服务"
+        val syncedAt = state.lastReceivedAt?.takeIf { it > 0L }
+        return when {
+            state.pulling -> "正在拉取…"
+            state.pullError != null && state.snapshot != null -> "拉取失败 · 使用缓存"
+            state.pullError != null -> "拉取失败"
+            syncedAt != null -> "已同步 · ${formatSyncTime(syncedAt)}"
+            else -> "等待拉取"
+        }
+    }
+    return when {
+        state.serverError != null -> "接收服务异常 · 仍可离线浏览"
+        !state.enabled && state.lastReceivedAt != null ->
+            "接收已关闭 · 离线浏览 ${formatSyncTime(state.lastReceivedAt)}"
+        !state.enabled -> "接收已关闭"
+        state.serverRunning && state.lastReceivedAt != null ->
+            "接收中 · ${formatSyncTime(state.lastReceivedAt)}"
+        state.serverRunning -> "接收中 · 端口 ${state.port}"
+        state.lastReceivedAt != null -> "未连接 · 离线浏览 ${formatSyncTime(state.lastReceivedAt)}"
+        else -> "等待插件推送"
+    }
 }
 
 private fun formatSyncTime(timestamp: Long?): String {

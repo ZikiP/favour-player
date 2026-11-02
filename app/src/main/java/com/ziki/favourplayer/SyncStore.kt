@@ -7,10 +7,18 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
 
+const val SYNC_MODE_RECEIVE = "receive"
+const val SYNC_MODE_PULL = "pull"
+
 data class ReceiveConfig(
     val port: Int,
     val token: String,
     val enabled: Boolean,
+)
+
+data class PullConfig(
+    val url: String = "",
+    val token: String = "",
 )
 
 class SyncStore(context: Context) {
@@ -40,6 +48,31 @@ class SyncStore(context: Context) {
         val token = generateToken()
         prefs.edit().putString(KEY_TOKEN, token).apply()
         return token
+    }
+
+    fun loadMode(): String =
+        if (prefs.getString(KEY_SYNC_MODE, SYNC_MODE_RECEIVE) == SYNC_MODE_PULL) {
+            SYNC_MODE_PULL
+        } else {
+            SYNC_MODE_RECEIVE
+        }
+
+    fun saveMode(mode: String) {
+        prefs.edit()
+            .putString(KEY_SYNC_MODE, if (mode == SYNC_MODE_PULL) SYNC_MODE_PULL else SYNC_MODE_RECEIVE)
+            .apply()
+    }
+
+    fun loadPullConfig(): PullConfig = PullConfig(
+        url = prefs.getString(KEY_PULL_URL, "").orEmpty().trim().trimEnd('/'),
+        token = prefs.getString(KEY_PULL_TOKEN, "").orEmpty().trim(),
+    )
+
+    fun savePullConfig(config: PullConfig) {
+        prefs.edit()
+            .putString(KEY_PULL_URL, config.url.trim().trimEnd('/'))
+            .putString(KEY_PULL_TOKEN, config.token.trim())
+            .apply()
     }
 
     fun loadCached(): LibrarySnapshot? {
@@ -76,6 +109,9 @@ class SyncStore(context: Context) {
         private const val KEY_PORT = "port"
         private const val KEY_TOKEN = "token"
         private const val KEY_ENABLED = "enabled"
+        private const val KEY_SYNC_MODE = "sync_mode"
+        private const val KEY_PULL_URL = "pull_url"
+        private const val KEY_PULL_TOKEN = "pull_token"
         private const val TAG = "FavourPlayer"
 
         private fun generateToken(): String {
