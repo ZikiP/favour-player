@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -56,9 +59,11 @@ import androidx.compose.ui.unit.sp
 import coil.ImageLoader
 import coil.compose.AsyncImage
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DetailScreen(
     item: LibraryItem,
+    avatars: Map<String, String> = emptyMap(),
     progress: PlaybackProgress?,
     imageLoader: ImageLoader,
     onBack: () -> Unit,
@@ -315,25 +320,26 @@ fun DetailScreen(
 
                 if (actress.isNotBlank()) {
                     SectionTitle("演员")
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(7.dp),
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(9.dp),
+                        verticalArrangement = Arrangement.spacedBy(9.dp),
                     ) {
                         item.actressNames().forEach { name ->
+                            val avatar = avatars[name.lowercase()].orEmpty()
                             Row(
                                 modifier = Modifier
+                                    .widthIn(max = 260.dp)
                                     .clip(RoundedCornerShape(999.dp))
                                     .background(PlayerColors.Panel)
                                     .clickable { onActorClick(name) }
-                                    .padding(start = 5.dp, end = 11.dp, top = 5.dp, bottom = 5.dp),
+                                    .padding(start = 4.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                                horizontalArrangement = Arrangement.spacedBy(9.dp),
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(25.dp)
+                                        .size(34.dp)
                                         .clip(CircleShape)
                                         .background(PlayerColors.AccentSoft),
                                     contentAlignment = Alignment.Center,
@@ -341,14 +347,25 @@ fun DetailScreen(
                                     Text(
                                         text = name.take(1),
                                         color = PlayerColors.Accent,
-                                        fontSize = 10.sp,
+                                        fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                     )
+                                    if (avatar.isNotBlank()) {
+                                        AsyncImage(
+                                            model = avatar,
+                                            imageLoader = imageLoader,
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                    }
                                 }
                                 Text(
                                     text = name,
                                     color = PlayerColors.Text,
-                                    fontSize = 11.5.sp,
+                                    fontSize = 12.5.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }

@@ -212,6 +212,7 @@ fun LibraryScreen(
         detailItem != null -> key(detailItem.id) {
             DetailScreen(
             item = detailItem,
+            avatars = state.snapshot?.actressAvatars.orEmpty(),
             progress = state.playback[detailItem.url],
             imageLoader = coverLoader,
             onBack = { detailId = null },
@@ -267,7 +268,6 @@ fun LibraryScreen(
                 .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {
             LibraryHeader(
-                tab = tab,
                 subtitle = when (tab) {
                     LibraryTab.Collections -> "${seriesStats.size} 个系列 · ${syncStatusText(state)}"
                     LibraryTab.Actresses -> "${actressStats.size} 位演员 · ${syncStatusText(state)}"
@@ -459,7 +459,6 @@ fun LibraryScreen(
 
 @Composable
 private fun LibraryHeader(
-    tab: LibraryTab,
     subtitle: String,
     refreshing: Boolean,
     onSearch: () -> Unit,
@@ -469,8 +468,8 @@ private fun LibraryHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.Bottom,
+            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -481,23 +480,12 @@ private fun LibraryHeader(
                 letterSpacing = 1.6.sp,
             )
             Text(
-                text = when (tab) {
-                    LibraryTab.Library -> "资料库"
-                    LibraryTab.Collections -> "合集"
-                    LibraryTab.Actresses -> "演员"
-                    LibraryTab.Favorites -> "最爱"
-                },
-                color = PlayerColors.Text,
-                style = MaterialTheme.typography.displaySmall,
-                modifier = Modifier.padding(top = 3.dp),
-            )
-            Text(
                 text = subtitle,
                 color = PlayerColors.Muted,
                 fontSize = 11.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 5.dp),
             )
         }
         Row(

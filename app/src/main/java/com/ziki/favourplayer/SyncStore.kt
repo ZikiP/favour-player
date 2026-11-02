@@ -3,6 +3,7 @@ package com.ziki.favourplayer
 import android.content.Context
 import android.util.Log
 import java.io.File
+import java.io.FileOutputStream
 
 data class PullConfig(
     val url: String = "",
@@ -35,9 +36,29 @@ class SyncStore(context: Context) {
     @Throws(Exception::class)
     fun saveSnapshot(raw: String): LibrarySnapshot {
         val snapshot = SnapshotParser.parse(raw)
-        cacheFile.writeText(raw)
+        writeAtomically(raw)
         Log.i(TAG, "stored ${snapshot.items.size} items")
         return snapshot
+    }
+
+    /**
+     * 先写临时文件再 rename，避免写一半被杀导致 snapshot.json 变成截断的 JSON
+     * （那样 loadCached 会静默返回 null，资料库看起来是空的）。
+     */
+    private fun writeAtomically(raw: String) {
+        val tmp = File(cacheFile.parentFile, "${cacheFile.name}.tmp")
+        try {
+            FileOutputStream(tmp).use { out ->
+                out.write(raw.toByteArray(Charsets.UTF_8))
+                out.flush()
+                out.fd.sync()
+            }
+            if (tmp.renameTo(cacheFile)) return
+            Log.w(TAG, "snapshot rename failed, falling back to direct write")
+            cacheFile.writeText(raw)
+        } finally {
+            if (tmp.exists()) tmp.delete()
+        }
     }
 
     companion object {

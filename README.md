@@ -135,10 +135,10 @@ Favour 扩展 --PUT /api/items--> 中间服务(常驻) --GET /api/items--> Favou
 
 ## 版本规则
 
-- `v0.0.1` 是旧的“App 拉取”版本；`v0.0.2` 起为直推版本；`v0.0.3` 起带视频缓存；`v0.0.4` 起支持收藏文字/封面离线缓存；`v0.0.5` 起支持中间服务拉取；`v0.0.6` 起支持连接测试；`v0.0.7` 起移除直推，仅保留中间服务拉取；`v0.0.8` 起采用暗色影院式界面、全屏详情、沉浸播放器和继续观看；`v0.0.9` 起资料库改为纯海报卡片，修复演员别名匹配并加入 Paparazzi 测试。
+- `v0.0.1` 是旧的“App 拉取”版本；`v0.0.2` 起为直推版本；`v0.0.3` 起带视频缓存；`v0.0.4` 起支持收藏文字/封面离线缓存；`v0.0.5` 起支持中间服务拉取；`v0.0.6` 起支持连接测试；`v0.0.7` 起移除直推，仅保留中间服务拉取；`v0.0.8` 起采用暗色影院式界面、全屏详情、沉浸播放器和继续观看；`v0.0.9` 起资料库改为纯海报卡片，修复演员别名匹配并加入 Paparazzi 测试；`v0.0.10` 起收紧顶部标题栏、详情页演员改为自动换行并显示头像，快照改为原子写入。
 - `main` 每次推送：`debug-latest`，versionName = `<version.properties 的 versionName>-dev.<run_number>`，versionCode = GitHub run number。
 - tag 构建：versionName = tag 去掉 `v`，生成同名 Release。
-- 发版：改 `version.properties` → `git tag v0.0.9` → `git push origin v0.0.9`。
+- 发版：改 `version.properties` → `git tag v0.0.10` → `git push origin v0.0.10`。
 - 本地构建默认读 `version.properties`；CI 通过 `-PversionName` / `-PversionCode` 覆盖。
 
 ## 构建
