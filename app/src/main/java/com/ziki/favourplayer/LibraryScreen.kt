@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
@@ -79,6 +80,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -157,6 +159,29 @@ fun LibraryScreen(
     }
     val activeActressName = actressFilter?.let { key ->
         actressStats.firstOrNull { it.key == key }?.name
+    }
+
+    // 用宽高比判断，分屏和折叠屏展开时方向值不一定可靠
+    val configuration = LocalConfiguration.current
+    val landscape = configuration.screenWidthDp > configuration.screenHeightDp
+
+    val filterActive = sort != LibrarySort.Recent ||
+        onlyWithActress ||
+        unwatchedOnly ||
+        actressFilter != null ||
+        seriesFilter != null ||
+        genreFilter != null
+
+    val selectTab: (LibraryTab) -> Unit = remember {
+        { next ->
+            tabName = next.name
+            query = ""
+            actressFilter = null
+            seriesFilter = null
+            genreFilter = null
+            onlyWithActress = false
+            unwatchedOnly = false
+        }
     }
 
     val filtered = remember(
@@ -261,53 +286,87 @@ fun LibraryScreen(
             onManualPlay = { showManual = true },
         )
 
-        else -> Column(
+        else -> Row(
             modifier = Modifier
                 .fillMaxSize()
                 .background(PlayerColors.Bg)
                 .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {
-            LibraryHeader(
-                subtitle = when (tab) {
-                    LibraryTab.Collections -> "${seriesStats.size} 个系列 · ${syncStatusText(state)}"
-                    LibraryTab.Actresses -> "${actressStats.size} 位演员 · ${syncStatusText(state)}"
-                    LibraryTab.Favorites -> "$favoriteCount 部最爱 · ${syncStatusText(state)}"
-                    LibraryTab.Library -> "${items.size} 部收藏 · ${syncStatusText(state)}"
-                },
-                refreshing = state.pulling,
-                onSearch = { searchFocus.requestFocus() },
-                onRefresh = { viewModel.pullNow() },
-                onSettings = { showSettings = true },
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Box(Modifier.weight(1f)) {
-                    FavourSearchField(
-                        value = query,
-                        onValueChange = { query = it },
-                        focusRequester = searchFocus,
-                    )
-                }
-                if (tab == LibraryTab.Library || tab == LibraryTab.Favorites) {
-                    FilterIcon(
-                        active = sort != LibrarySort.Recent ||
-                            onlyWithActress ||
-                            unwatchedOnly ||
-                            actressFilter != null ||
-                            seriesFilter != null ||
-                            genreFilter != null,
-                        onClick = { showFilters = true },
-                    )
-                }
+            if (landscape) {
+                FavourRail(
+                    selected = tab,
+                    onSelect = selectTab,
+                    onSettings = { showSettings = true },
+                )
             }
 
-            Spacer(Modifier.height(4.dp))
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+            ) {
+                if (landscape) {
+                    LandscapeHeader(
+                        title = when (tab) {
+                            LibraryTab.Library -> "收藏"
+                            LibraryTab.Collections -> "合集"
+                            LibraryTab.Actresses -> "演员"
+                            LibraryTab.Favorites -> "最爱"
+                        },
+                        summary = when (tab) {
+                            LibraryTab.Collections -> "${seriesStats.size} 个系列"
+                            LibraryTab.Actresses -> "${actressStats.size} 位"
+                            LibraryTab.Favorites -> "$favoriteCount 部"
+                            LibraryTab.Library -> "${items.size} 部"
+                        },
+                        query = query,
+                        onQueryChange = { query = it },
+                        searchFocus = searchFocus,
+                        refreshing = state.pulling,
+                        showFilter = tab == LibraryTab.Library || tab == LibraryTab.Favorites,
+                        filterActive = filterActive,
+                        onFilter = { showFilters = true },
+                        onRefresh = { viewModel.pullNow() },
+                        onSettings = { showSettings = true },
+                    )
+                } else {
+                    LibraryHeader(
+                        subtitle = when (tab) {
+                            LibraryTab.Collections -> "${seriesStats.size} 个系列 · ${syncStatusText(state)}"
+                            LibraryTab.Actresses -> "${actressStats.size} 位演员 · ${syncStatusText(state)}"
+                            LibraryTab.Favorites -> "$favoriteCount 部最爱 · ${syncStatusText(state)}"
+                            LibraryTab.Library -> "${items.size} 部收藏 · ${syncStatusText(state)}"
+                        },
+                        refreshing = state.pulling,
+                        onSearch = { searchFocus.requestFocus() },
+                        onRefresh = { viewModel.pullNow() },
+                        onSettings = { showSettings = true },
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Box(Modifier.weight(1f)) {
+                            FavourSearchField(
+                                value = query,
+                                onValueChange = { query = it },
+                                focusRequester = searchFocus,
+                            )
+                        }
+                        if (tab == LibraryTab.Library || tab == LibraryTab.Favorites) {
+                            FilterIcon(
+                                active = filterActive,
+                                onClick = { showFilters = true },
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(4.dp))
 
             when (tab) {
                 LibraryTab.Collections -> CollectionsContent(
@@ -399,18 +458,13 @@ fun LibraryScreen(
                 }
             }
 
-            FavourBottomBar(
-                selected = tab,
-                onSelect = {
-                    tabName = it.name
-                    query = ""
-                    actressFilter = null
-                    seriesFilter = null
-                    genreFilter = null
-                    onlyWithActress = false
-                    unwatchedOnly = false
-                },
-            )
+                if (!landscape) {
+                    FavourBottomBar(
+                        selected = tab,
+                        onSelect = selectTab,
+                    )
+                }
+            }
         }
     }
 
@@ -869,6 +923,133 @@ private fun ActressesContent(
                 onClick = { onActress(stat) },
             )
         }
+    }
+}
+
+@Composable
+private fun FavourRail(
+    selected: LibraryTab,
+    onSelect: (LibraryTab) -> Unit,
+    onSettings: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .width(74.dp)
+            .fillMaxHeight()
+            .background(PlayerColors.Panel.copy(alpha = 0.5f))
+            .padding(vertical = 10.dp, horizontal = 7.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        RailItem("收藏", Icons.Rounded.GridView, selected == LibraryTab.Library) {
+            onSelect(LibraryTab.Library)
+        }
+        RailItem("合集", Icons.Rounded.VideoLibrary, selected == LibraryTab.Collections) {
+            onSelect(LibraryTab.Collections)
+        }
+        RailItem("演员", Icons.Rounded.Person, selected == LibraryTab.Actresses) {
+            onSelect(LibraryTab.Actresses)
+        }
+        RailItem("最爱", Icons.Rounded.Favorite, selected == LibraryTab.Favorites) {
+            onSelect(LibraryTab.Favorites)
+        }
+        Spacer(Modifier.weight(1f))
+        RailItem("设置", Icons.Rounded.Settings, false, onSettings)
+    }
+}
+
+@Composable
+private fun RailItem(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    active: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (active) PlayerColors.AccentSoft else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(vertical = 7.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (active) PlayerColors.Accent else PlayerColors.Faint,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = label,
+            color = if (active) PlayerColors.Accent else PlayerColors.Faint,
+            fontSize = 9.sp,
+            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+        )
+    }
+}
+
+/** 横屏用：标题与搜索合并成一行，把纵向空间还给列表。 */
+@Composable
+private fun LandscapeHeader(
+    title: String,
+    summary: String,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    searchFocus: FocusRequester,
+    refreshing: Boolean,
+    showFilter: Boolean,
+    filterActive: Boolean,
+    onFilter: () -> Unit,
+    onRefresh: () -> Unit,
+    onSettings: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+        Column(Modifier.width(78.dp)) {
+            Text(
+                text = title,
+                color = PlayerColors.Text,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+            )
+            Text(
+                text = summary,
+                color = PlayerColors.Muted,
+                fontSize = 10.sp,
+                maxLines = 1,
+            )
+        }
+        Box(Modifier.weight(1f)) {
+            FavourSearchField(
+                value = query,
+                onValueChange = onQueryChange,
+                focusRequester = searchFocus,
+            )
+        }
+        if (showFilter) {
+            FilterIcon(active = filterActive, onClick = onFilter)
+        }
+        Box {
+            HeaderIcon(Icons.Rounded.Refresh, "立即同步", onRefresh)
+            if (refreshing) {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(10.dp),
+                    strokeWidth = 1.5.dp,
+                    color = PlayerColors.Accent,
+                )
+            }
+        }
+        HeaderIcon(Icons.Rounded.Settings, "同步设置", onSettings)
     }
 }
 
