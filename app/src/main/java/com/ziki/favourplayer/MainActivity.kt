@@ -22,12 +22,12 @@ class MainActivity : ComponentActivity() {
 
         libraryModel = ViewModelProvider(this)[LibraryViewModel::class.java]
 
-        sharedUrl(intent)?.let { openPlayer(it) }
+        sharedUrl(intent)?.let { openPlayer(it, false) }
         setContent {
             FavourPlayerTheme {
                 LibraryScreen(
                     viewModel = libraryModel,
-                    onPlay = { openPlayer(it) },
+                    onPlay = { url, fromStart -> openPlayer(url, fromStart) },
                 )
             }
         }
@@ -40,15 +40,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        sharedUrl(intent)?.let { openPlayer(it) }
+        sharedUrl(intent)?.let { openPlayer(it, false) }
     }
 
-    private fun openPlayer(rawUrl: String) {
+    private fun openPlayer(rawUrl: String, fromStart: Boolean) {
         val url = rawUrl.trim()
         if (url.isEmpty()) return
         startActivity(
             Intent(this, PlayerActivity::class.java)
-                .putExtra(PlayerActivity.EXTRA_PAGE_URL, url),
+                .putExtra(PlayerActivity.EXTRA_PAGE_URL, url)
+                .putExtra(PlayerActivity.EXTRA_FROM_START, fromStart),
         )
     }
 

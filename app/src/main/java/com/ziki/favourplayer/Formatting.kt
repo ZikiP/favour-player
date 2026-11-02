@@ -15,5 +15,11 @@ fun formatTime(ms: Long): String {
     }
 }
 
-fun formatSpeed(rate: Float): String =
-    if (rate == rate.toInt().toFloat()) "${rate.toInt()}x" else "${rate}x"
+fun formatSpeed(rate: Float): String {
+    val text = if (rate == rate.toInt().toFloat()) {
+        String.format(Locale.US, "%.1f", rate)
+    } else {
+        rate.toString()
+    }
+    return "${text}×"
+}

@@ -25,11 +25,13 @@ data class LibraryUiState(
     val pullTesting: Boolean = false,
     val pullTestMessage: String? = null,
     val pullTestOk: Boolean = false,
+    val playback: Map<String, PlaybackProgress> = emptyMap(),
 )
 
 class LibraryViewModel(app: Application) : AndroidViewModel(app) {
 
     private val store = SyncStore(app)
+    private val playbackStore = PlaybackStore(app)
     private val connectivityManager: ConnectivityManager? =
         app.getSystemService(ConnectivityManager::class.java)
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
@@ -52,6 +54,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
             lastReceivedAt = cached?.updatedAt,
             pullUrl = pull.url,
             pullToken = pull.token,
+            playback = playbackStore.all(),
         )
 
         viewModelScope.launch {
@@ -72,7 +75,12 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onForeground() {
+        refreshPlayback()
         pullNow(auto = true)
+    }
+
+    fun refreshPlayback() {
+        state = state.copy(playback = playbackStore.all())
     }
 
     fun pullNow(auto: Boolean = false) {

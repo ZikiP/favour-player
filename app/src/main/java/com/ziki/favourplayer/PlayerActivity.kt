@@ -43,6 +43,7 @@ class PlayerActivity : ComponentActivity() {
         hideSystemBars()
 
         val pageUrl = urlFromIntent(intent).orEmpty()
+        val fromStart = intent.getBooleanExtra(EXTRA_FROM_START, false)
 
         setContent {
             FavourPlayerTheme {
@@ -75,7 +76,12 @@ class PlayerActivity : ComponentActivity() {
                 when (val current = state) {
                     UiState.Loading -> PlayerLoading()
                     is UiState.Failed -> PlayerFailure(current.message) { finish() }
-                    is UiState.Ready -> PlayerScreen(current.stream) { finish() }
+                    is UiState.Ready -> PlayerScreen(
+                        stream = current.stream,
+                        contentKey = pageUrl,
+                        fromStart = fromStart,
+                        onBack = { finish() },
+                    )
                 }
             }
         }
@@ -109,6 +115,7 @@ class PlayerActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_PAGE_URL = "page_url"
+        const val EXTRA_FROM_START = "from_start"
     }
 }
 
