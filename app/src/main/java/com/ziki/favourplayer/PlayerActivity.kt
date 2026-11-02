@@ -55,7 +55,12 @@ class PlayerActivity : ComponentActivity() {
                     }
                     Log.i("FavourPlayer", "resolve start: $pageUrl")
                     state = try {
-                        val resolved = withContext(Dispatchers.IO) { Resolver.resolve(pageUrl) }
+                        val resolved = withContext(Dispatchers.IO) {
+                            Resolver.resolve(
+                                pageUrl,
+                                RuleStore(applicationContext).loadRules(),
+                            )
+                        }
                         Log.i(
                             "FavourPlayer",
                             "resolved uuid=${resolved.uuid} sprite=${resolved.sprite != null}",

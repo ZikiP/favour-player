@@ -196,8 +196,8 @@ fun PlayerScreen(stream: ResolvedStream, onBack: () -> Unit) {
     }
 
     val spriteConfig = stream.sprite
-    val spriteLoader = remember(stream.referer, stream.uuid, stream.cdnHost) {
-        SpriteLoader(stream.referer, stream.uuid, stream.cdnHost)
+    val spriteLoader = remember(stream.referer, stream.spriteUrlTemplate) {
+        stream.spriteUrlTemplate?.let { SpriteLoader(stream.referer, it) }
     }
     val controlsBlockPx = with(LocalDensity.current) { 190.dp.toPx() }
 
@@ -286,7 +286,8 @@ fun PlayerScreen(stream: ResolvedStream, onBack: () -> Unit) {
         }
 
         val preview = previewMs
-        if (spriteConfig != null && preview != null) {
+        val loader = spriteLoader
+        if (spriteConfig != null && preview != null && loader != null) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -296,7 +297,7 @@ fun PlayerScreen(stream: ResolvedStream, onBack: () -> Unit) {
                     frame = frameAt(preview, durationMs, spriteConfig),
                     positionMs = preview,
                     config = spriteConfig,
-                    loader = spriteLoader,
+                    loader = loader,
                 )
             }
         }

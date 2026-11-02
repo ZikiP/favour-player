@@ -2,6 +2,7 @@ package com.ziki.favourplayer
 
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.net.URI
 import java.util.concurrent.TimeUnit
 
 data class SpriteConfig(
@@ -17,11 +18,11 @@ data class SpriteConfig(
 data class ResolvedStream(
     val pageUrl: String,
     val uuid: String,
-    val cdnHost: String,
     val masterUrl: String,
     val referer: String,
     val title: String,
     val sprite: SpriteConfig?,
+    val spriteUrlTemplate: String?,
 )
 
 class ResolveException(message: String) : Exception(message)
@@ -37,12 +38,6 @@ object Resolver {
         .followRedirects(true)
         .build()
 
-    private val seekSource = Regex(
-        """([A-Za-z0-9.-]+\.[A-Za-z]{2,})[^0-9a-fA-F]{0,4}([0-9a-fA-F-]{32,36})[^0-9a-fA-F]{0,4}seek""",
-    )
-    private val playlistSource = Regex(
-        """([A-Za-z0-9.-]+\.[A-Za-z]{2,})[^0-9a-fA-F]{0,4}([0-9a-fA-F-]{32,36})[^0-9a-fA-F]{0,4}playlist\.m3u8""",
-    )
     private val titleTag = Regex("""<title>(.*?)</title>""", RegexOption.DOT_MATCHES_ALL)
 
     fun normalize(input: String): String {
@@ -51,26 +46,30 @@ object Resolver {
         return if (raw.startsWith("http://") || raw.startsWith("https://")) raw else "https://$raw"
     }
 
-    fun resolve(input: String): ResolvedStream {
+    fun resolve(input: String, rules: List<ResolveRule>): ResolvedStream {
         val pageUrl = normalize(input)
         val path = pageUrl.substringBefore('?').substringBefore('#')
         if (path.endsWith(".m3u8", ignoreCase = true)) {
             return ResolvedStream(
                 pageUrl = pageUrl,
                 uuid = "",
-                cdnHost = "",
                 masterUrl = pageUrl,
                 referer = "",
                 title = pageUrl.substringAfter("://").substringBefore('/'),
                 sprite = null,
+                spriteUrlTemplate = null,
             )
         }
 
+        val pageHost = runCatching { URI(pageUrl).host }.getOrNull()
+        val rule = rules.firstOrNull { it.matches(pageHost) }
+            ?: throw ResolveException("没有匹配的解析规则")
+
         val request = Request.Builder()
             .url(pageUrl)
-            .header("User-Agent", DESKTOP_UA)
+            .header("User-Agent", rule.userAgent)
             .header("Accept", "text/html,application/xhtml+xml")
-            .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+            .header("Accept-Language", rule.acceptLanguage)
             .build()
 
         client.newCall(request).execute().use { response ->
@@ -80,47 +79,72 @@ object Resolver {
             val html = response.body?.string().orEmpty()
             if (html.isBlank()) throw ResolveException("页面内容为空")
 
-            val source = playlistSource.find(html) ?: seekSource.find(html)
-                ?: throw ResolveException("页面上没找到视频源，页面结构可能变了")
-            val cdnHost = source.groupValues.getOrNull(1).orEmpty()
-            val uuid = source.groupValues.getOrNull(2).orEmpty()
-            if (cdnHost.isBlank() || uuid.isBlank()) {
-                throw ResolveException("页面上没找到视频源，页面结构可能变了")
+            val matched = rule.sourcePatterns.firstNotNullOfOrNull { pattern ->
+                val match = pattern.find(html) ?: return@firstNotNullOfOrNull null
+                val host = match.groupValues.getOrNull(rule.hostGroup).orEmpty()
+                val uuid = match.groupValues.getOrNull(rule.uuidGroup).orEmpty()
+                if (host.isBlank() || uuid.isBlank()) null else host to uuid
+            } ?: throw ResolveException("页面上没找到视频源，或规则不匹配")
+
+            val cdnHost = matched.first
+            val uuid = matched.second
+            val masterUrl = rule.masterUrlTemplate
+                .replace("{host}", cdnHost)
+                .replace("{uuid}", uuid)
+
+            val spriteRule = rule.sprite
+            val sprite = spriteRule?.let { parseSprite(html, it) }
+            val spriteUrlTemplate = if (sprite != null && spriteRule != null) {
+                spriteRule.urlTemplate
+                    .replace("{host}", cdnHost)
+                    .replace("{uuid}", uuid)
+            } else {
+                null
             }
 
             val finalUrl = response.request.url
-            val referer = "${finalUrl.scheme}://${finalUrl.host}/"
-            val title = titleTag.find(html)?.groupValues?.get(1)
-                ?.replace(Regex("""\s+"""), " ")
-                ?.trim()
-                ?.take(120)
-                .orEmpty()
+            val referer = when (rule.refererMode) {
+                "page-origin" -> "${finalUrl.scheme}://${finalUrl.host}/"
+                else -> ""
+            }
+            val title = when (rule.titleMode) {
+                "page-title" -> titleTag.find(html)?.groupValues?.get(1)
+                    ?.replace(Regex("""\s+"""), " ")
+                    ?.trim()
+                    ?.take(120)
+                    .orEmpty()
+                else -> ""
+            }
 
             return ResolvedStream(
                 pageUrl = finalUrl.toString(),
                 uuid = uuid,
-                cdnHost = cdnHost,
-                masterUrl = "https://$cdnHost/$uuid/playlist.m3u8",
+                masterUrl = masterUrl,
                 referer = referer,
                 title = title,
-                sprite = parseSprite(html),
+                sprite = sprite,
+                spriteUrlTemplate = spriteUrlTemplate,
             )
         }
     }
 
-    private fun parseSprite(html: String): SpriteConfig? {
-        val anchor = html.indexOf("pic_num")
+    private fun parseSprite(html: String, rule: SpriteRule): SpriteConfig? {
+        val anchor = html.indexOf(rule.anchor)
         if (anchor < 0) return null
-        val region = html.substring(anchor, minOf(html.length, anchor + 700))
+        val region = html.substring(anchor, minOf(html.length, anchor + rule.window.coerceAtLeast(1)))
 
         fun number(key: String): Int? =
-            Regex("""$key\s*:\s*(\d+)""").find(region)?.groupValues?.get(1)?.toIntOrNull()
+            Regex("""${Regex.escape(key)}\s*:\s*(\d+)""")
+                .find(region)
+                ?.groupValues
+                ?.get(1)
+                ?.toIntOrNull()
 
-        val frames = number("pic_num") ?: return null
-        val width = number("width") ?: return null
-        val height = number("height") ?: return null
-        val cols = number("col") ?: return null
-        val rows = number("row") ?: return null
+        val frames = number(rule.frameCountKey) ?: return null
+        val width = number(rule.widthKey) ?: return null
+        val height = number(rule.heightKey) ?: return null
+        val cols = number(rule.colsKey) ?: return null
+        val rows = number(rule.rowsKey) ?: return null
         if (frames <= 0 || width <= 0 || height <= 0 || cols <= 0 || rows <= 0) return null
 
         return SpriteConfig(width, height, cols, rows, frames)

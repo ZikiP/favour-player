@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "default-hls-page",
+      "name": "默认示例：通用 HLS 页面",
+      "hosts": [],
+      "acceptLanguage": "zh-CN,zh;q=0.9,en;q=0.8",
+      "sourcePatterns": [
+        "([A-Za-z0-9.-]+\\.[A-Za-z]{2,})[^0-9a-fA-F]{0,4}([0-9a-fA-F-]{32,36})[^0-9a-fA-F]{0,4}playlist\\.m3u8",
+        "([A-Za-z0-9.-]+\\.[A-Za-z]{2,})[^0-9a-fA-F]{0,4}([0-9a-fA-F-]{32,36})[^0-9a-fA-F]{0,4}seek"
+      ],
+      "hostGroup": 1,
+      "uuidGroup": 2,
+      "masterUrlTemplate": "https://{host}/{uuid}/playlist.m3u8",
+      "sprite": {
+        "enabled": true,
+        "anchor": "pic_num",
+        "window": 700,
+        "frameCountKey": "pic_num",
+        "widthKey": "width",
+        "heightKey": "height",
+        "colsKey": "col",
+        "rowsKey": "row",
+        "urlTemplate": "https://{host}/{uuid}/seek/_{sheet}.jpg"
+      },
+      "refererMode": "page-origin",
+      "titleMode": "page-title"
+    }
+  ]
+}

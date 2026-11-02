@@ -34,8 +34,7 @@ import okhttp3.Request
 
 class SpriteLoader(
     private val referer: String,
-    private val uuid: String,
-    private val cdnHost: String,
+    private val urlTemplate: String,
 ) {
     private val client = OkHttpClient.Builder().build()
     private val cache = LruCache<Int, ImageBitmap>(6)
@@ -45,7 +44,7 @@ class SpriteLoader(
         return withContext(Dispatchers.IO) {
             cache.get(index)?.let { return@withContext it }
             val request = Request.Builder()
-                .url("https://$cdnHost/$uuid/seek/_$index.jpg")
+                .url(urlTemplate.replace("{sheet}", index.toString()))
                 .header("User-Agent", Resolver.DESKTOP_UA)
                 .header("Referer", referer)
                 .build()

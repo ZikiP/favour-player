@@ -49,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,6 +86,9 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
     var tab by rememberSaveable { mutableStateOf("library") }
     var actressFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var detail by remember { mutableStateOf<LibraryItem?>(null) }
+    var showRules by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val ruleStore = remember { RuleStore(context) }
 
     val items = state.snapshot?.items.orEmpty()
     val actressStats = remember(items) { buildActressStats(items) }
@@ -274,7 +278,20 @@ fun LibraryScreen(viewModel: LibraryViewModel, onPlay: (String) -> Unit) {
                 showSettings = false
                 viewModel.clearConfig()
             },
+            onRules = {
+                showSettings = false
+                showRules = true
+            },
             onDismiss = { showSettings = false },
+        )
+    }
+    if (showRules) {
+        RulesDialog(
+            userJson = ruleStore.userJson(),
+            defaultJson = ruleStore.defaultExampleJson(),
+            onSave = { ruleStore.saveUserRules(it) },
+            onReset = { ruleStore.clearUserRules() },
+            onDismiss = { showRules = false },
         )
     }
     if (showManual) {

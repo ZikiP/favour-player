@@ -160,6 +160,7 @@ fun SettingsDialog(
     state: LibraryUiState,
     onSave: (String, String) -> Unit,
     onClear: () -> Unit,
+    onRules: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var server by rememberSaveable { mutableStateOf(state.config?.serverUrl ?: DEFAULT_SERVER) }
@@ -213,7 +214,10 @@ fun SettingsDialog(
                     token = token,
                     onTokenChange = { token = it },
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     Button(
                         onClick = { onSave(server, token) },
                         enabled = server.isNotBlank() && token.isNotBlank() && !state.loading,
@@ -232,6 +236,9 @@ fun SettingsDialog(
                     ) {
                         Text("清除配置", color = PlayerColors.Danger)
                     }
+                }
+                TextButton(onClick = onRules) {
+                    Text("解析规则…", color = PlayerColors.Accent)
                 }
                 state.error?.let { message ->
                     Text(
@@ -296,7 +303,7 @@ fun ManualPlayDialog(
                     onValueChange = { url = it },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("地址") },
-                    placeholder = { Text("https://...") },
+                    placeholder = { Text("https://example.com/watch/...") },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),

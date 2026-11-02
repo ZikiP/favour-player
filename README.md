@@ -20,7 +20,7 @@ App 从你自己的 favour-sync 服务拉取 `/api/items` 快照并缓存到本�
 - 同步 + 本地缓存 + 离线展示；失败可重试。
 - 资料库：收藏 / 演员 / 最爱、搜索、卡片（封面、编号、演员、日期、最爱、播放）、详情弹窗。
 - 详情页或卡片播放键 → `PlayerActivity` 解析并直连播放。
-- 手动播放（收藏页或 `.m3u8` 直链）；浏览器分享文本可直接进播放器。
+- 手动播放（收藏页或 `.m3u8` 直链），示例地址：`https://example.com/watch/123`；浏览器分享文本可直接进播放器。
 - 横竖屏适配：网格按宽度自适应，详情弹窗横屏左右 / 竖屏上下，播放器控件独立适配。
 - 封面用 Coil 加载并缓存；失败回退编号色块。
 
@@ -45,6 +45,50 @@ App 从你自己的 favour-sync 服务拉取 `/api/items` 快照并缓存到本�
 - 访问令牌：`favour-sync` 的 `data/token.txt`，或部署输出。
 - 手机需能访问该地址：Tailscale 登录同一账号；若同时开 FlClash，需要让 `*.ts.net` 绕过代理。
 - 配置保存在 App 私有 SharedPreferences（明文），设置里可清除。
+
+## 解析规则
+
+播放器的解析是规则驱动的，默认规则在 `app/src/main/assets/resolver_rules.json`：
+
+- 默认示例适用于“页面 HTML 中出现 `host + UUID + seek/playlist`”的通用模式，不绑定任何站点。
+- App 设置 → 解析规则，可粘贴 `{"rules":[...]}` 追加规则；自定义规则优先于默认规则。
+- 主要字段：`hosts`（空数组 = 任意站点）、`sourcePatterns`（捕获 host/uuid 的正则）、`hostGroup` / `uuidGroup`、`masterUrlTemplate`、`sprite`、`refererMode`、`titleMode`。
+- 模板占位符：`{host}`、`{uuid}`；雪碧图 URL 额外支持 `{sheet}`。
+
+通用示例（`example.com`，仅示意）：
+
+```json
+{
+  "rules": [
+    {
+      "id": "example-site",
+      "name": "Example site",
+      "hosts": ["example.com"],
+      "sourcePatterns": [
+        "https?://([^/\"']+)/([0-9a-fA-F-]{32,36})/(?:seek|playlist)"
+      ],
+      "hostGroup": 1,
+      "uuidGroup": 2,
+      "masterUrlTemplate": "https://{host}/{uuid}/playlist.m3u8",
+      "sprite": {
+        "enabled": true,
+        "anchor": "pic_num",
+        "window": 700,
+        "frameCountKey": "pic_num",
+        "widthKey": "width",
+        "heightKey": "height",
+        "colsKey": "col",
+        "rowsKey": "row",
+        "urlTemplate": "https://{host}/{uuid}/seek/_{sheet}.jpg"
+      },
+      "refererMode": "page-origin",
+      "titleMode": "page-title"
+    }
+  ]
+}
+```
+
+字段可省略；保存时会校验 JSON 与有效规则数量。
 
 ## 构建
 
@@ -71,8 +115,11 @@ app/src/main/java/com/ziki/favourplayer/
   LibraryScreen.kt     顶部栏、搜索、Tabs、网格、空态/错误
   LibraryCards.kt      卡片、演员卡、详情弹窗
   LibrarySettings.kt   首次配置、同步设置、手动播放
+  RulesSettings.kt     解析规则编辑弹窗
+  ResolveRules.kt      规则模型与 JSON 解析
+  RuleStore.kt         默认规则(asset) + 用户规则(prefs)
   PlayerActivity.kt    解析状态机 + 深链
-  Resolver.kt          页面/直链解析、UUID、雪碧图配置
+  Resolver.kt          按规则解析页面/直链、UUID、雪碧图配置
   PlayerScreen.kt      ExoPlayer + 页面组装
   PlayerControls.kt    播放器控件
   PlayerSeekBar.kt     自绘进度条
@@ -82,6 +129,7 @@ app/src/main/java/com/ziki/favourplayer/
   Quality.kt           清晰度
   Formatting.kt        时间/倍速格式化
   Theme.kt             色板
+app/src/main/assets/resolver_rules.json  默认解析规则示例
 ```
 
 ## 验证状态
