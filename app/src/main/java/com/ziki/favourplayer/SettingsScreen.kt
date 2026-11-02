@@ -32,6 +32,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.VerticalAlignBottom
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.Button
@@ -160,6 +161,14 @@ fun SettingsScreen(
                     title = "双击跳转",
                     subtitle = "播放画面左右两侧",
                     value = formatSeconds(playerSettings.doubleTapMs.toInt()),
+                    onClick = { showPlayback = true },
+                )
+                RowDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.VerticalAlignBottom,
+                    title = "播放控件位置",
+                    subtitle = "控制栏距屏幕底部",
+                    value = controlBottomLabel(playerSettings.controlBottom),
                     onClick = { showPlayback = true },
                 )
                 RowDivider()
@@ -519,4 +528,12 @@ private fun formatSeconds(ms: Int): String {
 private fun formatSyncTime(timestamp: Long?): String {
     if (timestamp == null || timestamp <= 0L) return "未知"
     return SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(timestamp))
+}
+
+private fun controlBottomLabel(value: Int): String = when (value) {
+    0 -> "贴底"
+    12 -> "标准"
+    24 -> "抬高"
+    40 -> "更高"
+    else -> "${value}dp"
 }
