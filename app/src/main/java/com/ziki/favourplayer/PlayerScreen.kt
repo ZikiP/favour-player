@@ -87,10 +87,17 @@ fun PlayerScreen(
     val scope = rememberCoroutineScope()
     var caption by remember { mutableStateOf<SubtitleTrack?>(null) }
     // 控件位置可自由调，字幕避让要防止超出画面
-    val screenHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
+    // 控件位置可自由调，竖横屏各存一份
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
+    val controlBottomDp = if (isLandscape) {
+        playerPrefs.controlBottomLandscape
+    } else {
+        playerPrefs.controlBottomPortrait
+    }
     val subtitleClearance = minOf(
-        154 + playerPrefs.controlBottom,
-        (screenHeightDp * 0.55f).toInt(),
+        154 + controlBottomDp,
+        (configuration.screenHeightDp * 0.55f).toInt(),
     )
     var subtitleStyle by remember { mutableStateOf(subtitleStyleStore.load()) }
     var showSubtitleSettings by remember { mutableStateOf(false) }
@@ -345,7 +352,7 @@ fun PlayerScreen(
         stream.spriteUrlTemplate?.let { SpriteLoader(stream.referer, it) }
     }
     val controlsBlockPx = with(LocalDensity.current) {
-        (156 + playerPrefs.controlBottom).dp.toPx()
+        (156 + controlBottomDp).dp.toPx()
     }
     val subtitle = hostOf(stream.pageUrl)
 
@@ -565,7 +572,7 @@ fun PlayerScreen(
                     subtitleStore.clear(contentKey)
                 },
                 onOpenSubtitleSettings = { showSubtitleSettings = true },
-                controlBottom = playerPrefs.controlBottom,
+                controlBottom = controlBottomDp,
                 onTogglePlay = {
                     if (player.isPlaying) player.pause() else player.play()
                     touch()

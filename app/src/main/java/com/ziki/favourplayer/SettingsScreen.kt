@@ -82,6 +82,7 @@ fun SettingsScreen(
     var showCache by remember { mutableStateOf(false) }
     var showRules by remember { mutableStateOf(false) }
     var showPlayback by remember { mutableStateOf(false) }
+    var showControlPosition by remember { mutableStateOf(false) }
     var showSubtitleStyle by remember { mutableStateOf(false) }
 
     Box(
@@ -166,10 +167,10 @@ fun SettingsScreen(
                 RowDivider()
                 SettingsRow(
                     icon = Icons.Rounded.VerticalAlignBottom,
-                    title = "播放控件位置",
-                    subtitle = "控制栏距屏幕底部",
-                    value = controlBottomLabel(playerSettings.controlBottom),
-                    onClick = { showPlayback = true },
+                    title = "控件位置",
+                    subtitle = "竖屏 / 横屏分别设置",
+                    value = "${playerSettings.controlBottomPortrait} / ${playerSettings.controlBottomLandscape} dp",
+                    onClick = { showControlPosition = true },
                 )
                 RowDivider()
                 SettingsRow(
@@ -270,6 +271,15 @@ fun SettingsScreen(
                     playerSettings = it
                 },
                 onBack = { showPlayback = false },
+            )
+        } else if (showControlPosition) {
+            ControlPositionPage(
+                initial = playerSettings,
+                onSave = {
+                    playerPrefs.save(it)
+                    playerSettings = it
+                },
+                onBack = { showControlPosition = false },
             )
         } else if (showSubtitleStyle) {
             SubtitleSettingsPage(
@@ -529,6 +539,3 @@ private fun formatSyncTime(timestamp: Long?): String {
     if (timestamp == null || timestamp <= 0L) return "未知"
     return SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(timestamp))
 }
-
-private fun controlBottomLabel(value: Int): String =
-    if (value <= 0) "贴底" else "${value} dp"
