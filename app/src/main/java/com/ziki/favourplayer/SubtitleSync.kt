@@ -66,21 +66,29 @@ object SubtitleSync {
         }
     }
 
-    /** 上传某作品的共享字幕；text 传空表示只更新样式、保留服务端已有正文。 */
+    /**
+     * 上传某作品的共享字幕；text 传空表示只更新样式、保留服务端已有正文。
+     *
+     * [clientUpdatedAt] 是这份字幕在本机最后改动的时间，服务端拿它裁决先后，
+     * 免得旧设备的数据把新改的顶掉。
+     */
     fun upload(
         config: PullConfig,
         contentKey: String,
         name: String,
         text: String,
-        style: SubtitleStyle,
+        style: SubtitleStyle?,
+        clientUpdatedAt: Long = 0L,
     ): Boolean {
         val base = PullClient.normalizeBase(config.url) ?: return false
         if (config.token.isBlank()) return false
-        val body = JSONObject()
+        val payload = JSONObject()
             .put("name", name)
             .put("text", text)
-            .put("style", SubtitleStyleCodec.encode(style))
-            .toString()
+        // style 传 null 表示「这次不动样式」，服务端保留原有那份
+        style?.let { payload.put("style", SubtitleStyleCodec.encode(it)) }
+        if (clientUpdatedAt > 0L) payload.put("clientUpdatedAt", clientUpdatedAt)
+        val body = payload.toString()
         val request = Request.Builder()
             .url("$base/api/subtitles/${keyOf(contentKey)}")
             .header("Authorization", "Bearer ${config.token}")
@@ -127,39 +135,83 @@ object SubtitleSync {
         return try {
             downloadClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return emptyList()
-                val root = runCatching { JSONObject(response.body?.string().orEmpty()) }
-                    .getOrNull() ?: return emptyList()
-                val array = root.optJSONArray("subtitles") ?: return emptyList()
-                buildList {
-                    for (index in 0 until array.length()) {
-                        val entry = array.optJSONObject(index) ?: continue
-                        val key = entry.optString("key").trim()
-                        if (key.isBlank()) continue
-                        add(
-                            SharedSubtitleMeta(
-                                key = key,
-                                name = entry.optString("name"),
-                                updatedAt = entry.optLong("updatedAt", 0L),
-                                textLen = entry.optInt("textLen", 0),
-                                // 空对象代表服务端没存过样式，别拿默认值把本地设置冲掉
-                                style = entry.optJSONObject("style")
-                                    ?.takeIf { it.length() > 0 }
-                                    ?.let { SubtitleStyleCodec.decode(it) },
-                            ),
-                        )
-                    }
-                }
+                parseSubtitleList(response.body?.string().orEmpty())
             }
         } catch (_: Exception) {
             emptyList()
         }
     }
 
+    /** 把服务端清单 JSON 解成条目；字段缺失或格式不对就当没有。 */
+    internal fun parseSubtitleList(raw: String): List<SharedSubtitleMeta> {
+        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return emptyList()
+        val array = root.optJSONArray("subtitles") ?: return emptyList()
+        return buildList {
+            for (index in 0 until array.length()) {
+                val entry = array.optJSONObject(index) ?: continue
+                val key = entry.optString("key").trim()
+                if (key.isBlank()) continue
+                add(
+                    SharedSubtitleMeta(
+                        key = key,
+                        name = entry.optString("name"),
+                        updatedAt = entry.optLong("updatedAt", 0L),
+                        clientUpdatedAt = entry.optLong("clientUpdatedAt", 0L),
+                        textLen = entry.optInt("textLen", 0),
+                        // 空对象代表服务端没存过样式，别拿默认值把本地设置冲掉
+                        style = entry.optJSONObject("style")
+                            ?.takeIf { it.length() > 0 }
+                            ?.let { SubtitleStyleCodec.decode(it) },
+                    ),
+                )
+            }
+        }
+    }
+
     /**
-     * 把服务端已共享的字幕全部拉回本地，只处理本机收藏里有的作品。
+     * 把本机已有的字幕全部推上去。
      *
-     * 这是「点同步」的主要动作：手机上调好的偏移和样式，另一台设备
-     * 同步一次就落到本地，下次打开那个作品直接沿用，不用等播放器懒加载。
+     * 这是「点同步」的前半步：挂字幕、调偏移往往发生在没开 Tailscale 的时候
+     * （那会儿连不上中间服务），所以上传只能在同步时补。
+     * 返回推成功的条数。
+     */
+    fun pushAll(
+        config: PullConfig,
+        subtitleStore: SubtitleStore,
+        styleStore: SubtitleStyleStore,
+    ): Int {
+        val base = PullClient.normalizeBase(config.url) ?: return 0
+        if (config.token.isBlank()) return 0
+        // 有正文的 + 只调过样式的，都算「已经设置好的作品」
+        val keys = (subtitleStore.allKeys() + styleStore.itemKeys())
+            .distinct()
+            .take(MAX_SYNC_ITEMS)
+        var pushed = 0
+        for (contentKey in keys) {
+            val local = subtitleStore.loadText(contentKey)
+            val hasStyle = styleStore.hasOverride(contentKey)
+            if (local == null && !hasStyle) continue
+            val ok = upload(
+                config,
+                contentKey,
+                local?.first.orEmpty(),
+                local?.second.orEmpty(),
+                // 没有单独调过样式就传 null，让服务端保留原有样式
+                if (hasStyle) styleStore.load(contentKey) else null,
+                subtitleStore.localAt(contentKey),
+            )
+            if (ok) {
+                pushed += 1
+                subtitleStore.saveSharedAt(contentKey, System.currentTimeMillis())
+            }
+        }
+        return pushed
+    }
+
+    /**
+     * 点同步时的字幕双向同步：先把本机已有的推上去，再把服务端更新的拉下来。
+     *
+     * 只处理本机收藏里有的作品——服务端只认 URL 摘要，反查只能在本机做。
      *
      * 阻塞调用，必须放在 IO 线程。返回统计用于界面提示。
      */
@@ -169,9 +221,10 @@ object SubtitleSync {
         subtitleStore: SubtitleStore,
         styleStore: SubtitleStyleStore,
     ): SubtitleSyncResult {
-        if (contentKeys.isEmpty()) return SubtitleSyncResult()
+        val pushed = pushAll(config, subtitleStore, styleStore)
+        if (contentKeys.isEmpty()) return SubtitleSyncResult(pushed = pushed)
         val metas = list(config)
-        if (metas.isEmpty()) return SubtitleSyncResult()
+        if (metas.isEmpty()) return SubtitleSyncResult(pushed = pushed)
 
         // 收藏里的每一版都有自己的 URL，服务端 key 是 URL 的摘要，按 key 反查
         val byKey = keyIndex(contentKeys)
@@ -181,6 +234,13 @@ object SubtitleSync {
         var failed = 0
         for (meta in metas.take(MAX_SYNC_ITEMS)) {
             val contentKey = byKey[meta.key] ?: continue
+            // 本机这份不比服务端旧（刚推上去的就是这种情况），不用往回拉
+            if (meta.clientUpdatedAt > 0L &&
+                meta.clientUpdatedAt <= subtitleStore.localAt(contentKey)
+            ) {
+                skipped += 1
+                continue
+            }
             val known = subtitleStore.sharedAt(contentKey)
             if (meta.updatedAt > 0L && known >= meta.updatedAt) {
                 skipped += 1
@@ -199,10 +259,19 @@ object SubtitleSync {
                 )
             }
             remote.style?.let { styleStore.save(contentKey, it) }
+            // 用服务端记的改动时间对齐本地，避免下次同步又把它当成本机新改动推回去
+            if (meta.clientUpdatedAt > 0L) {
+                subtitleStore.markLocalAt(contentKey, meta.clientUpdatedAt)
+            }
             if (meta.updatedAt > 0L) subtitleStore.saveSharedAt(contentKey, meta.updatedAt)
             updated += 1
         }
-        return SubtitleSyncResult(updated = updated, skipped = skipped, failed = failed)
+        return SubtitleSyncResult(
+            pushed = pushed,
+            updated = updated,
+            skipped = skipped,
+            failed = failed,
+        )
     }
 
     /** 一次同步最多处理多少部作品，防止清单异常时把界面拖住。 */
@@ -214,12 +283,17 @@ data class SharedSubtitleMeta(
     val key: String,
     val name: String,
     val updatedAt: Long,
+    /** 这份字幕在写入方本机最后改动的时间，用来比先后 */
+    val clientUpdatedAt: Long,
     val textLen: Int,
     val style: SubtitleStyle?,
 )
 
 /** 一次「同步字幕」的结果统计。 */
 data class SubtitleSyncResult(
+    /** 本机推上去的条数 */
+    val pushed: Int = 0,
+    /** 从服务端拉下来并覆盖本地的条数 */
     val updated: Int = 0,
     val skipped: Int = 0,
     val failed: Int = 0,

@@ -863,6 +863,8 @@ fun PlayerScreen(
                 onSave = { updated ->
                     subtitleStyle = updated
                     subtitleStyleStore.save(contentKey, updated)
+                    // 调样式也算本地改过，点同步时要以这个时间判断谁更新
+                    subtitleStore.markLocalAt(contentKey)
                     uploadSubtitleStyle(updated)
                 },
                 onBack = {

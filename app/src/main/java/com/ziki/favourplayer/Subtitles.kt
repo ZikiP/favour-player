@@ -309,8 +309,32 @@ class SubtitleStore(context: Context) {
             prefs.edit()
                 .putString(textKey(key), fileName)
                 .putString(nameKey(key), name)
+                .putLong(localAtKey(key), System.currentTimeMillis())
                 .apply()
         }
+    }
+
+    /**
+     * 这份字幕在本机最后一次改动的时间。
+     *
+     * 点同步时带给服务端做先后裁决：两台设备都改过时，晚改的赢。
+     */
+    fun localAt(key: String): Long =
+        if (key.isBlank()) 0L else prefs.getLong(localAtKey(key), 0L)
+
+    /** 只改了样式没换字幕文件时，也算本地改过，得让服务端知道。 */
+    fun markLocalAt(key: String, at: Long = System.currentTimeMillis()) {
+        if (key.isBlank()) return
+        prefs.edit().putLong(localAtKey(key), at).apply()
+    }
+
+    /** 本机存过正文的作品地址，点同步时要逐个推上去。 */
+    fun allKeys(): List<String> {
+        val suffix = "\u0000text"
+        return prefs.all.keys
+            .filter { it.endsWith(suffix) }
+            .map { it.removeSuffix(suffix) }
+            .filter { it.isNotBlank() }
     }
 
     fun loadText(key: String): Pair<String, String>? {
@@ -346,6 +370,7 @@ class SubtitleStore(context: Context) {
             .remove(nameKey(key))
             .remove(textKey(key))
             .remove(sharedAtKey(key))
+            .remove(localAtKey(key))
             .apply()
     }
 
@@ -358,6 +383,7 @@ class SubtitleStore(context: Context) {
     private fun nameKey(key: String) = "$key\u0000name"
     private fun textKey(key: String) = "$key\u0000text"
     private fun sharedAtKey(key: String) = "$key\u0000sharedAt"
+    private fun localAtKey(key: String) = "$key\u0000localAt"
 }
 
 object SubtitleLoader {
@@ -541,6 +567,12 @@ class SubtitleStyleStore(context: Context) {
 
     fun hasOverride(key: String): Boolean =
         key.isNotBlank() && prefs.contains(itemKey(key))
+
+    /** 本机单独调过样式的作品地址，点同步时要连同样式一起推上去。 */
+    fun itemKeys(): List<String> = prefs.all.keys
+        .filter { it.startsWith(ITEM_PREFIX) }
+        .map { it.removePrefix(ITEM_PREFIX) }
+        .filter { it.isNotBlank() }
 
     /** 导出全部按作品设置的样式，供偏好同步使用。 */
     fun exportItems(limit: Int = 500): JSONObject {

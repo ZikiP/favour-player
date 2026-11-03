@@ -22,6 +22,10 @@ object PullClient {
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .followRedirects(true)
+        // 中间服务通常在 Tailscale 私有网段。手机同时挂着 HTTP 代理时，
+        // OkHttp 会把内网请求也丢给代理，代理访问不到 100.64/10 就报连接失败。
+        // 这里对私有地址强制直连，公网地址仍然按系统代理走。
+        .proxySelector(PrivateDirectProxySelector)
         .build()
 
     fun pull(context: Context, config: PullConfig): PullResult {
@@ -149,5 +153,43 @@ object PullClient {
         is UnknownHostException, is ConnectException, is SocketTimeoutException ->
             "无法连接中间服务，请确认 Tailscale 已开启"
         else -> "拉取失败：${error.message ?: "网络异常"}"
+    }
+}
+
+/**
+ * 私有网段的请求不走系统代理，其余照旧走默认选择器。
+ *
+ * 手机切到 Clash 这类代理时，OkHttp 默认会把所有请求（包括 Tailscale 的
+ * 100.x 地址）发给代理服务器，结果是「明明开了 Tailscale 却连不上」。
+ */
+internal object PrivateDirectProxySelector : java.net.ProxySelector() {
+
+    override fun select(uri: URI): List<java.net.Proxy> {
+        val host = uri.host?.lowercase().orEmpty()
+        if (isPrivateHost(host)) return listOf(java.net.Proxy.NO_PROXY)
+        return java.net.ProxySelector.getDefault()?.select(uri)
+            ?: listOf(java.net.Proxy.NO_PROXY)
+    }
+
+    override fun connectFailed(uri: URI?, sa: java.net.SocketAddress?, ioe: java.io.IOException?) = Unit
+}
+
+/** 回环、局域网、Tailscale CGNAT 段，以及不带点的内网主机名。 */
+internal fun isPrivateHost(host: String): Boolean {
+    if (host.isBlank()) return true
+    if (host == "localhost" || host == "::1" || host.startsWith("[")) return true
+    // MagicDNS 之类的主机名没有点，交给系统解析更靠得住
+    if (!host.contains('.')) return true
+    val parts = host.split('.')
+    val a = parts.getOrNull(0)?.toIntOrNull() ?: return false
+    val b = parts.getOrNull(1)?.toIntOrNull() ?: return false
+    return when {
+        a == 10 -> true
+        a == 127 -> true
+        a == 192 && b == 168 -> true
+        a == 172 && b in 16..31 -> true
+        a == 100 && b in 64..127 -> true // Tailscale 100.64.0.0/10
+        a == 169 && b == 254 -> true
+        else -> false
     }
 }

@@ -61,4 +61,38 @@ class SubtitleSyncMatchTest {
         assertEquals(2, decoded.position)
         assertTrue(decoded.bold)
     }
+
+    @Test
+    fun parseListReadsClientTime() {
+        val raw = """
+            {"subtitles":[
+              {"key":"abc123","name":"a.srt","updatedAt":200,"clientUpdatedAt":100,"textLen":42,
+               "style":{"offset":1200,"size":16,"color":-1,"bg":1,"bold":false,"pos":1}}
+            ]}
+        """.trimIndent()
+        val list = SubtitleSync.parseSubtitleList(raw)
+        assertEquals(1, list.size)
+        assertEquals("abc123", list[0].key)
+        assertEquals(100L, list[0].clientUpdatedAt)
+        assertEquals(42, list[0].textLen)
+        assertEquals(1200L, list[0].style?.offsetMs)
+    }
+
+    @Test
+    fun parseListToleratesMissingFields() {
+        // 老版本服务端没有 clientUpdatedAt，当成 0 处理，不影响取其它字段
+        val list = SubtitleSync.parseSubtitleList(
+            """{"subtitles":[{"key":"k1","name":"n","updatedAt":9,"textLen":0,"style":{}}]}""",
+        )
+        assertEquals(1, list.size)
+        assertEquals(0L, list[0].clientUpdatedAt)
+        assertNull(list[0].style)
+    }
+
+    @Test
+    fun parseListHandlesGarbage() {
+        assertTrue(SubtitleSync.parseSubtitleList("not json").isEmpty())
+        assertTrue(SubtitleSync.parseSubtitleList("""{"subtitles":[]}""").isEmpty())
+        assertTrue(SubtitleSync.parseSubtitleList("{}").isEmpty())
+    }
 }

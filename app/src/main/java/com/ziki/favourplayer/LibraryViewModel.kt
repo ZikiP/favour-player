@@ -184,7 +184,8 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
                 }.getOrNull()
             } ?: return@launch
             state = state.copy(
-                subtitleSyncedCount = result.updated,
+                // 推上去的和拉下来的都算「这次同步动了字幕」
+                subtitleSyncedCount = result.pushed + result.updated,
                 subtitleSyncedAt = System.currentTimeMillis(),
             )
         }
