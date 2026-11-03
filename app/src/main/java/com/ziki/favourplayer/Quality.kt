@@ -28,6 +28,19 @@ fun buildQualityOptions(player: Player): List<QualityOption> {
     return options.sortedByDescending { it.height }
 }
 
+/** 当前实际在播的视频轨分辨率；拿不到就退回解码器给的画面高度。 */
+fun currentVideoHeight(player: Player): Int {
+    for (group in player.currentTracks.groups) {
+        if (group.type != C.TRACK_TYPE_VIDEO || !group.isSelected) continue
+        for (index in 0 until group.length) {
+            if (!group.isTrackSelected(index)) continue
+            val height = group.getTrackFormat(index).height
+            if (height > 0) return height
+        }
+    }
+    return player.videoSize.height
+}
+
 fun applyQuality(player: Player, option: QualityOption?) {
     val builder = player.trackSelectionParameters.buildUpon()
     if (option == null) {

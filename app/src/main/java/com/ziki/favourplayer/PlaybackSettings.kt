@@ -66,6 +66,13 @@ fun PlaybackSettingsPage(
             onSelect = { settings = settings.copy(frameRateMatch = it) },
         )
         ChoiceRow(
+            label = "画质优先",
+            hint = "锁定最高可用码率，不因带宽不足自动降档；弱网下可能卡顿或缓冲",
+            options = listOf(false to "关闭", true to "开启"),
+            selected = settings.qualityFirst,
+            onSelect = { settings = settings.copy(qualityFirst = it) },
+        )
+        ChoiceRow(
             label = "画质锐化",
             hint = "只增强亮度细节，不放大画面；片源码率低时建议关闭",
             options = SharpenLevel.values().map { it to it.label },

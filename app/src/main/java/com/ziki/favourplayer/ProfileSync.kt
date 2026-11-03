@@ -72,6 +72,7 @@ object SettingsBackup {
                 put("controlBottomLandscape", player.controlBottomLandscape)
                 put("sharpen", player.sharpen.name)
                 put("frameRateMatch", player.frameRateMatch)
+                put("qualityFirst", player.qualityFirst)
             },
         )
 
@@ -124,6 +125,7 @@ object SettingsBackup {
                         SharpenLevel.values().firstOrNull { it.name == name }
                     } ?: current.sharpen,
                     frameRateMatch = json.optBoolean("frameRateMatch", current.frameRateMatch),
+                    qualityFirst = json.optBoolean("qualityFirst", current.qualityFirst),
                 ),
             )
         }

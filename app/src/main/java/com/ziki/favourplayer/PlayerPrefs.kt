@@ -10,6 +10,8 @@ data class PlayerSettings(
     val controlBottomLandscape: Int = 0,
     val sharpen: SharpenLevel = SharpenLevel.Off,
     val frameRateMatch: Boolean = true,
+    /** 画质优先：锁最高可用码率，不因带宽估算自动降档。默认开启。 */
+    val qualityFirst: Boolean = true,
 )
 
 class PlayerPrefs(context: Context) {
@@ -35,6 +37,7 @@ class PlayerPrefs(context: Context) {
         ).coerceIn(0, CONTROL_BOTTOM_MAX),
         sharpen = SharpenLevel.fromOrdinal(prefs.getInt(KEY_SHARPEN, SharpenLevel.Off.ordinal)),
         frameRateMatch = prefs.getBoolean(KEY_FRAME_RATE, true),
+        qualityFirst = prefs.getBoolean(KEY_QUALITY_FIRST, true),
     )
 
     fun save(settings: PlayerSettings) {
@@ -52,6 +55,7 @@ class PlayerPrefs(context: Context) {
             )
             .putInt(KEY_SHARPEN, settings.sharpen.ordinal)
             .putBoolean(KEY_FRAME_RATE, settings.frameRateMatch)
+            .putBoolean(KEY_QUALITY_FIRST, settings.qualityFirst)
             .apply()
     }
 
@@ -69,5 +73,6 @@ class PlayerPrefs(context: Context) {
         private const val KEY_CB_LANDSCAPE = "control_bottom_landscape"
         private const val KEY_SHARPEN = "sharpen_level"
         private const val KEY_FRAME_RATE = "frame_rate_match"
+        private const val KEY_QUALITY_FIRST = "quality_first"
     }
 }

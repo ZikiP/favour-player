@@ -66,6 +66,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -215,9 +216,14 @@ fun PlayerScreen(
         ActivityResultContracts.OpenDocument(),
     ) { uri -> if (uri != null) applySubtitleFile(uri) }
 
+    // 轨道选择器单独持有：画质优先要在它身上强制最高码率，
+    // 用户手动选画质时再把这个强制解除。
+    val trackSelector = remember { DefaultTrackSelector(context) }
     val player = remember(stream.masterUrl) {
-        buildPlayer(context, stream, playerPrefs.sharpen)
+        buildPlayer(context, stream, playerPrefs.sharpen, trackSelector, playerPrefs.qualityFirst)
     }
+    // 用户手动挑过画质之后，就以用户的选择为准，不再被画质优先顶回来
+    var userPickedQuality by remember { mutableStateOf(false) }
     var resumed by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
     var isBuffering by remember { mutableStateOf(true) }
@@ -326,6 +332,14 @@ fun PlayerScreen(
                 Log.i("FavourPlayer", "tracks=${qualities.joinToString { it.label }}")
                 val value = player.duration
                 if (value > 0L) durationMs = value
+                if (playerPrefs.qualityFirst && !userPickedQuality) {
+                    // 画质优先：画质胶囊显示当前实际在播的分辨率
+                    val height = currentVideoHeight(player)
+                    if (height > 0) {
+                        selectedHeight = height
+                        Log.i("FavourPlayer", "quality-first height=$height")
+                    }
+                }
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
@@ -798,6 +812,13 @@ fun PlayerScreen(
                 },
                 onSpeedSelected = { rate -> setSpeed(rate) },
                 onQualitySelected = { option ->
+                    userPickedQuality = true
+                    // 用户手动选了画质就解除「强制最高码率」，否则选择会被立刻顶掉
+                    trackSelector.setParameters(
+                        trackSelector.buildUponParameters()
+                            .setForceHighestSupportedBitrate(false)
+                            .build(),
+                    )
                     applyQuality(player, option)
                     selectedHeight = option?.height ?: -1
                     touch()
@@ -842,6 +863,8 @@ private fun buildPlayer(
     context: Context,
     stream: ResolvedStream,
     sharpen: SharpenLevel,
+    trackSelector: DefaultTrackSelector,
+    qualityFirst: Boolean,
 ): ExoPlayer {
     val headers = buildMap {
         // UA 必须和解析页面时一致：CDN 常做「页面 UA == 媒体 UA」的一致性校验
@@ -873,7 +896,17 @@ private fun buildPlayer(
         .setAllowChunklessPreparation(true)
         .createMediaSource(MediaItem.fromUri(stream.masterUrl))
 
+    // 画质优先：强制选最高码率，并且允许超出视频尺寸约束，
+    // 否则带宽估算一觉得吃力就会把清晰度降下去。
+    trackSelector.setParameters(
+        trackSelector.buildUponParameters()
+            .setExceedVideoConstraintsIfNecessary(true)
+            .setForceHighestSupportedBitrate(qualityFirst)
+            .build(),
+    )
+
     return ExoPlayer.Builder(context)
+        .setTrackSelector(trackSelector)
         .build()
         .apply {
             // 特效链必须在 prepare() 之前建立，之后改只能换效果、不能新建管线
