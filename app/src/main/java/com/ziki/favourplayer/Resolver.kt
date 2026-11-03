@@ -23,6 +23,14 @@ data class ResolvedStream(
     val title: String,
     val sprite: SpriteConfig?,
     val spriteUrlTemplate: String?,
+    /**
+     * 解析页面时实际用的 User-Agent。
+     *
+     * 拉流必须用同一个 UA：不少 CDN 会把「页面请求的 UA」和「媒体请求的 UA」
+     * 做一致性校验，不一致就 403。之前这里写死 DESKTOP_UA，
+     * 和规则里配置的 userAgent 对不上，等于自己把请求拒了。
+     */
+    val userAgent: String = Resolver.DESKTOP_UA,
 )
 
 class ResolveException(message: String) : Exception(message)
@@ -32,11 +40,7 @@ object Resolver {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .build()
+    private val client get() = HttpClients.client
 
     private val titleTag = Regex("""<title>(.*?)</title>""", RegexOption.DOT_MATCHES_ALL)
 
@@ -103,10 +107,7 @@ object Resolver {
             }
 
             val finalUrl = response.request.url
-            val referer = when (rule.refererMode) {
-                "page-origin" -> "${finalUrl.scheme}://${finalUrl.host}/"
-                else -> ""
-            }
+            val referer = buildReferer(rule.refererMode, finalUrl.toString())
             val title = when (rule.titleMode) {
                 "page-title" -> titleTag.find(html)?.groupValues?.get(1)
                     ?.replace(Regex("""\s+"""), " ")
@@ -124,7 +125,35 @@ object Resolver {
                 title = title,
                 sprite = sprite,
                 spriteUrlTemplate = spriteUrlTemplate,
+                // 拉流用和解析页面同一个 UA，避免 CDN 的一致性校验把请求拒了
+                userAgent = rule.userAgent,
             )
+        }
+    }
+
+    /**
+     * 计算拉流请求要带的 Referer。
+     *
+     * 这是能不能播的关键。实测过 missav.live 的 CDN（surrit.com）：
+     * 带 Referer → 200 拿到 m3u8；不带 → 403「Attention Required! | Cloudflare」。
+     * 而且 Origin 形式（`https://missav.live/`）就够用，完整页面 URL 也可以。
+     *
+     * 所以规则没显式写 `refererMode`（或写成未知值）时，这里用页面 origin 兜底，
+     * 而不是留空 —— 留空等于让 CDN 拒掉，而用户完全看不出原因。
+     */
+    internal fun buildReferer(refererMode: String, pageUrl: String): String {
+        val origin = runCatching {
+            val uri = URI(pageUrl)
+            // 用 authority 而不是 host：后者不含端口，本地自建站点会拼错
+            "${uri.scheme}://${uri.authority}/"
+        }.getOrNull().orEmpty()
+        return when (refererMode) {
+            // 完整页面 URL：防盗链校验 Referer 时，有些站点比的是完整地址（含路径）
+            "page-url" -> pageUrl
+            // 显式不要 Referer
+            "none" -> ""
+            // 默认与未知值都兜底成 origin：宁可多带一个头，也别被 CDN 一刀切掉
+            else -> origin
         }
     }
 

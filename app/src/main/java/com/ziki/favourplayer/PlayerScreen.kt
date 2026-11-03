@@ -50,8 +50,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -156,6 +158,7 @@ fun PlayerScreen(
     var bufferedMs by remember { mutableLongStateOf(0L) }
     var suppressUntil by remember { mutableLongStateOf(0L) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorReport by remember { mutableStateOf<PlaybackDiagnostics.Report?>(null) }
     var qualities by remember { mutableStateOf<List<QualityOption>>(emptyList()) }
     var selectedHeight by remember { mutableIntStateOf(-1) }
     // 视频画面比例，用来把字幕贴到画面底边而不是屏幕底边
@@ -257,7 +260,9 @@ fun PlayerScreen(
 
             override fun onPlayerError(error: PlaybackException) {
                 Log.e("FavourPlayer", "player error ${error.errorCodeName}", error)
-                errorMessage = error.errorCodeName
+                val report = PlaybackDiagnostics.describe(error, stream.masterUrl)
+                errorReport = report
+                errorMessage = report.summary
                 isBuffering = false
             }
         }
@@ -512,30 +517,50 @@ fun PlayerScreen(
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "检查网络或页面是否仍可访问。",
+                    text = message,
                     color = PlayerColors.Muted,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,
                 )
-                Text(
-                    text = message,
-                    color = PlayerColors.Faint,
-                    fontSize = 10.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
+                // 失败的具体地址：出问题时第一眼就能判断是站点变了还是网络断了
+                errorReport?.let { report ->
+                    Text(
+                        text = report.url,
+                        color = PlayerColors.Faint,
+                        fontSize = 9.5.sp,
+                        fontFamily = FontFamily.Monospace,
+                        textAlign = TextAlign.Center,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
                 Row(
                     modifier = Modifier.padding(top = 14.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     TextButton(onClick = {
                         errorMessage = null
+                        errorReport = null
                         isBuffering = true
                         player.prepare()
                         player.play()
                         controlsVisible = true
                     }) {
                         Text("重试", color = PlayerColors.Accent)
+                    }
+                    // 复制诊断：把底层错误原因带出去，方便排查
+                    errorReport?.let { report ->
+                        TextButton(onClick = {
+                            copyToClipboard(context, "播放诊断", report.detail)
+                            Toast.makeText(context, "诊断信息已复制", Toast.LENGTH_SHORT).show()
+                        }) {
+                            Text("复制诊断", color = PlayerColors.Muted)
+                        }
+                    }
+                    // 兜底：App 播不了时，至少还能用浏览器看
+                    TextButton(onClick = { openInBrowser(context, stream.pageUrl) }) {
+                        Text("浏览器打开", color = PlayerColors.Muted)
                     }
                     TextButton(onClick = onBack) {
                         Text("返回", color = PlayerColors.Muted)
@@ -725,14 +750,32 @@ private fun buildPlayer(
     sharpen: SharpenLevel,
 ): ExoPlayer {
     val headers = buildMap {
-        put("User-Agent", Resolver.DESKTOP_UA)
-        if (stream.referer.isNotBlank()) put("Referer", stream.referer)
+        // UA 必须和解析页面时一致：CDN 常做「页面 UA == 媒体 UA」的一致性校验
+        put("User-Agent", stream.userAgent.ifBlank { Resolver.DESKTOP_UA })
+        if (stream.referer.isNotBlank()) {
+            put("Referer", stream.referer)
+            // Origin 与 Referer 同源。CDN 的防盗链规则常一起看这两个头，
+            // 只给 Referer 缺 Origin 仍可能被判成盗链。
+            runCatching {
+                val uri = java.net.URI(stream.referer)
+                if (uri.scheme != null && uri.host != null) {
+                    put("Origin", "${uri.scheme}://${uri.host}")
+                }
+            }
+        }
+        // 贴近浏览器的常规请求头。CDN 的风控会看 Accept 家族是否齐全，
+        // OkHttp 默认一个都不带，容易被判定为异常客户端。
+        put("Accept", "*/*")
+        put("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
     }
-    val upstream = OkHttpDataSource.Factory(OkHttpClient())
+    // 用共享客户端：解析页面时站点下发的 Cookie 能带到 m3u8 和分片请求上，
+    // 否则浏览器能播、App 里 403。
+    val upstream = OkHttpDataSource.Factory(HttpClients.client)
         .setDefaultRequestProperties(headers)
-    val dataSourceFactory = MediaCache.dataSourceFactory(context, upstream)
+    // 播放列表不进缓存，避免缓存里的过期分片地址导致播放失败
+    val hlsFactory = MediaCache.hlsDataSourceFactory(context, upstream)
 
-    val mediaSource = HlsMediaSource.Factory(dataSourceFactory)
+    val mediaSource = HlsMediaSource.Factory(hlsFactory)
         .setAllowChunklessPreparation(true)
         .createMediaSource(MediaItem.fromUri(stream.masterUrl))
 

@@ -2,11 +2,13 @@ package com.ziki.favourplayer
 
 import android.content.Context
 import android.util.Log
+import androidx.media3.common.C
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
+import androidx.media3.exoplayer.hls.HlsDataSourceFactory
 import java.io.File
 
 object MediaCache {
@@ -25,6 +27,28 @@ object MediaCache {
             .setUpstreamDataSourceFactory(upstream)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
     }
+
+    /**
+     * 给 HLS 用的数据源工厂：播放列表走原始上游，分片才进缓存。
+     *
+     * 播放列表（manifest）是会变的：里面写着分片的实际地址，很多站点
+     * 每次访问都会换一批带时效签名的分片 URL。把播放列表也缓存下来的话，
+     * 缓存里那份一旦过期，播放器就会拿着失效地址去拉分片，
+     * 表现就是「转圈很久，最后报网络失败」——而且清缓存之前一直好不了。
+     *
+     * 分片是不可变的，缓存起来才有意义。
+     */
+    fun hlsDataSourceFactory(context: Context, upstream: DataSource.Factory): HlsDataSourceFactory =
+        object : HlsDataSourceFactory {
+            override fun createDataSource(dataType: Int): DataSource {
+                // DATA_TYPE_MANIFEST = 播放列表；其余（分片、初始化段）才缓存
+                return if (dataType == C.DATA_TYPE_MANIFEST) {
+                    upstream.createDataSource()
+                } else {
+                    dataSourceFactory(context, upstream).createDataSource()
+                }
+            }
+        }
 
     fun usage(context: Context): CacheUsage {
         val config = CacheStore(context).load()
