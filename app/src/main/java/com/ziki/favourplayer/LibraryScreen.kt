@@ -149,6 +149,8 @@ fun LibraryScreen(
     val sort = LibrarySort.entries.firstOrNull { it.name == sortName } ?: LibrarySort.Recent
     // 干净模式：资料库一片空白，什么收藏都看不到
     val items = if (CleanMode.enabled) emptyList() else state.snapshot?.items.orEmpty()
+    // 同一部作品的多版本合成一张卡片；条目本身仍是一条版本一条
+    val groups = remember(items) { groupItems(items) }
     val actressStats = remember(items, state.snapshot?.actressAvatars, state.snapshot?.actressMeta) {
         buildActressStats(
             items,
@@ -158,8 +160,14 @@ fun LibraryScreen(
     }
     val seriesStats = remember(items) { buildSeriesStats(items) }
     val tagStats = remember(items) { buildTagStats(items) }
-    val favoriteCount = remember(items) { items.count { it.favorite } }
+    val favoriteCount = remember(groups) { groups.count { it.favorite } }
     val detailItem = detailId?.let { id -> items.firstOrNull { it.id == id } }
+    val detailGroup = remember(detailItem, groups) {
+        detailItem?.let { item ->
+            val key = Versions.workKey(item).ifEmpty { "item:${item.id}" }
+            groups.firstOrNull { it.key == key }
+        }
+    }
     val relatedWorks = remember(detailItem, items) {
         detailItem?.let { relatedFor(it, items) }.orEmpty()
     }
@@ -196,18 +204,19 @@ fun LibraryScreen(
     val worksSeriesKey = worksPage?.takeIf { it.startsWith("series:") }?.removePrefix("series:")
     val worksActorStat = worksActorKey?.let { key -> actressStats.firstOrNull { it.key == key } }
     val worksSeriesStat = worksSeriesKey?.let { key -> seriesStats.firstOrNull { it.key == key } }
-    val worksItems = remember(worksActorKey, worksSeriesKey, items) {
-        when {
+    val worksGroups = remember(worksActorKey, worksSeriesKey, items) {
+        val matched = when {
             worksActorKey != null -> items.filter { item ->
                 item.actressNames().any { it.lowercase() == worksActorKey }
-            }.sortedByDescending { it.createdAt }
+            }
 
             worksSeriesKey != null -> items.filter { item ->
                 item.series().lowercase() == worksSeriesKey
-            }.sortedByDescending { it.createdAt }
+            }
 
             else -> emptyList()
         }
+        groupItems(matched).sortedByDescending { it.createdAt }
     }
 
     val filtered = remember(
@@ -221,7 +230,7 @@ fun LibraryScreen(
         onlyWithActress,
         unwatchedOnly,
     ) {
-        filterAndSort(
+        val matched = filterAndSort(
             items,
             query,
             tab,
@@ -232,6 +241,15 @@ fun LibraryScreen(
             unwatchedOnly,
             sort,
         )
+        val grouped = groupItems(matched).let { list ->
+            if (tab == LibraryTab.Favorites) list.filter { it.favorite } else list
+        }
+        when (sort) {
+            LibrarySort.Recent -> grouped.sortedByDescending { it.createdAt }
+            LibrarySort.LastOpened -> grouped.sortedByDescending { it.lastOpenedAt }
+            LibrarySort.Oldest -> grouped.sortedBy { it.createdAt }
+            LibrarySort.Title -> grouped.sortedBy { it.title.lowercase() }
+        }
     }
     val continueItems = remember(items, state.playback, tab, query, actressFilter, seriesFilter, genreFilter, onlyWithActress, unwatchedOnly) {
         if (tab != LibraryTab.Library ||
@@ -247,6 +265,7 @@ fun LibraryScreen(
             items.mapNotNull { item ->
                 state.playback[item.url]?.let { progress -> item to progress }
             }.sortedByDescending { it.second.updatedAt }
+                .distinctBy { Versions.workKey(it.first).ifEmpty { it.first.id } }
                 .take(8)
         }
     }
@@ -266,7 +285,7 @@ fun LibraryScreen(
     }
 
     when {
-        detailItem != null -> key(detailItem.id) {
+        detailItem != null -> key(detailGroup?.key ?: detailItem.id) {
             DetailScreen(
             item = detailItem,
             avatars = state.snapshot?.actressAvatars.orEmpty(),
@@ -296,6 +315,8 @@ fun LibraryScreen(
             },
             related = relatedWorks,
             onOpenRelated = { detailId = it.id },
+            versions = detailGroup?.versions ?: listOf(detailItem),
+            onSelectVersion = { picked -> detailId = picked.id },
             )
         }
 
@@ -308,14 +329,14 @@ fun LibraryScreen(
             subtitle = buildString {
                 append(if (worksActorKey != null) "演员" else "系列")
                 append(" · ")
-                append(worksItems.size)
+                append(worksGroups.size)
                 append(" 部作品")
             },
-            items = worksItems,
+            groups = worksGroups,
             imageLoader = coverLoader,
             onBack = closeWorksPage,
-            onOpen = { detailId = it.id },
-            onPlay = { onPlay(it.url, false) },
+            onOpen = { detailId = it.primary.id },
+            onPlay = { onPlay(it.primary.url, false) },
         )
 
         showSettings -> SettingsScreen(
@@ -358,7 +379,7 @@ fun LibraryScreen(
                             LibraryTab.Collections -> "${seriesStats.size} 个系列"
                             LibraryTab.Actresses -> "${actressStats.size} 位"
                             LibraryTab.Favorites -> "$favoriteCount 部"
-                            LibraryTab.Library -> "${items.size} 部"
+                            LibraryTab.Library -> "${groups.size} 部"
                         },
                         query = query,
                         onQueryChange = { query = it },
@@ -376,7 +397,7 @@ fun LibraryScreen(
                             LibraryTab.Collections -> "${seriesStats.size} 个系列 · ${syncStatusText(state)}"
                             LibraryTab.Actresses -> "${actressStats.size} 位演员 · ${syncStatusText(state)}"
                             LibraryTab.Favorites -> "$favoriteCount 部最爱 · ${syncStatusText(state)}"
-                            LibraryTab.Library -> "${items.size} 部收藏 · ${syncStatusText(state)}"
+                            LibraryTab.Library -> "${groups.size} 部收藏 · ${syncStatusText(state)}"
                         },
                         refreshing = state.pulling,
                         onSearch = { searchFocus.requestFocus() },
@@ -472,13 +493,14 @@ fun LibraryScreen(
                     )
                 } else {
                     LibraryGridContent(
-                        items = filtered,
+                        groups = filtered,
                         continueItems = continueItems,
                         imageLoader = coverLoader,
                         gridState = libraryGrid,
                         modifier = Modifier.weight(1f),
-                        onOpen = { detailId = it.id },
-                        onPlay = { onPlay(it.url, false) },
+                        onOpen = { detailId = it.primary.id },
+                        onPlay = { onPlay(it.primary.url, false) },
+                        onPlayItem = { onPlay(it.url, false) },
                     )
                 }
             }
@@ -775,13 +797,14 @@ private fun ActiveFilterChip(
 
 @Composable
 private fun LibraryGridContent(
-    items: List<LibraryItem>,
+    groups: List<WorkGroup>,
     continueItems: List<Pair<LibraryItem, PlaybackProgress>>,
     imageLoader: coil.ImageLoader,
     gridState: LazyGridState,
     modifier: Modifier,
-    onOpen: (LibraryItem) -> Unit,
-    onPlay: (LibraryItem) -> Unit,
+    onOpen: (WorkGroup) -> Unit,
+    onPlay: (WorkGroup) -> Unit,
+    onPlayItem: (LibraryItem) -> Unit,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(150.dp),
@@ -796,16 +819,16 @@ private fun LibraryGridContent(
                 ContinueSection(
                     entries = continueItems,
                     imageLoader = imageLoader,
-                    onPlay = { onPlay(it) },
+                    onPlay = { onPlayItem(it) },
                 )
             }
         }
-        gridItems(items, key = { it.id }) { item ->
+        gridItems(groups, key = { it.key }) { group ->
             ItemCard(
-                item = item,
+                group = group,
                 imageLoader = imageLoader,
-                onClick = { onOpen(item) },
-                onPlay = { onPlay(item) },
+                onClick = { onOpen(group) },
+                onPlay = { onPlay(group) },
             )
         }
     }
@@ -1233,8 +1256,10 @@ private fun relatedFor(
     val series = item.series().lowercase()
     val genres = item.genres().map { it.lowercase() }
     val actresses = item.actressNames().map { it.lowercase() }
+    val work = Versions.workKey(item).ifEmpty { "item:${item.id}" }
     return all.asSequence()
-        .filter { it.id != item.id }
+        // 同一部作品的其他版本不算「相关」，它们在详情页的版本选择里
+        .filter { it.id != item.id && Versions.workKey(it).ifEmpty { "item:${it.id}" } != work }
         .map { other ->
             var score = 0
             if (series.isNotBlank() && other.series().lowercase() == series) score += 4
@@ -1263,15 +1288,19 @@ private fun buildActressStats(
     meta: Map<String, ActressMeta>,
 ): List<ActressStat> {
     val map = linkedMapOf<String, ActressStat>()
+    // 统计口径按作品算：同一部作品的中文字幕版和无码版只算一部
+    val works = hashMapOf<String, MutableSet<String>>()
     for (item in items) {
+        val work = Versions.workKey(item).ifEmpty { "item:${item.id}" }
         for (name in item.actressNames()) {
             val key = name.lowercase()
             val existing = map[key]
             val actressMeta = meta[key]
+            val counted = works.getOrPut(key) { mutableSetOf() }.add(work)
             map[key] = ActressStat(
                 key = key,
                 name = existing?.name ?: name,
-                count = (existing?.count ?: 0) + 1,
+                count = (existing?.count ?: 0) + if (counted) 1 else 0,
                 avatar = avatars[key] ?: existing?.avatar.orEmpty(),
                 favorite = actressMeta?.favorite ?: existing?.favorite ?: false,
                 order = actressMeta?.order ?: existing?.order ?: 0,
@@ -1288,11 +1317,14 @@ private fun buildActressStats(
 
 private fun buildSeriesStats(items: List<LibraryItem>): List<SeriesStat> {
     val map = linkedMapOf<String, SeriesStat>()
+    val works = hashMapOf<String, MutableSet<String>>()
     for (item in items) {
         val label = item.series()
         if (label.isBlank()) continue
         val key = label.lowercase()
         val existing = map[key]
+        val work = Versions.workKey(item).ifEmpty { "item:${item.id}" }
+        val counted = works.getOrPut(key) { mutableSetOf() }.add(work)
         val latestAt = maxOf(existing?.latestAt ?: 0L, item.createdAt)
         val cover = when {
             item.cover.isBlank() -> existing?.cover.orEmpty()
@@ -1302,7 +1334,7 @@ private fun buildSeriesStats(items: List<LibraryItem>): List<SeriesStat> {
         map[key] = SeriesStat(
             key = key,
             label = existing?.label ?: label,
-            count = (existing?.count ?: 0) + 1,
+            count = (existing?.count ?: 0) + if (counted) 1 else 0,
             cover = cover,
             latestAt = latestAt,
         )
@@ -1316,14 +1348,17 @@ private fun buildSeriesStats(items: List<LibraryItem>): List<SeriesStat> {
 
 private fun buildTagStats(items: List<LibraryItem>): List<TagStat> {
     val map = linkedMapOf<String, TagStat>()
+    val works = hashMapOf<String, MutableSet<String>>()
     for (item in items) {
+        val work = Versions.workKey(item).ifEmpty { "item:${item.id}" }
         for (label in item.displayLabels()) {
             val key = label.lowercase()
             val existing = map[key]
+            val counted = works.getOrPut(key) { mutableSetOf() }.add(work)
             map[key] = TagStat(
                 key = key,
                 label = existing?.label ?: label,
-                count = (existing?.count ?: 0) + 1,
+                count = (existing?.count ?: 0) + if (counted) 1 else 0,
             )
         }
     }
@@ -1344,7 +1379,7 @@ private fun filterAndSort(
     sort: LibrarySort,
 ): List<LibraryItem> {
     var list = items
-    if (tab == LibraryTab.Favorites) list = list.filter { it.favorite }
+    // 最爱按作品判断，分组后再过滤，避免只留下其中一个版本
     if (onlyWithActress) list = list.filter { it.actressNames().isNotEmpty() }
     if (unwatchedOnly) list = list.filter { !it.watched }
     if (actressFilter != null) {

@@ -41,12 +41,14 @@ import coil.compose.AsyncImage
 
 @Composable
 fun ItemCard(
-    item: LibraryItem,
+    group: WorkGroup,
     imageLoader: ImageLoader,
     onClick: () -> Unit,
     onPlay: () -> Unit,
 ) {
-    val code = item.extra("code")?.value.orEmpty()
+    val item = group.primary
+    // 卡片只留番号，版本信息在详情页的版本选择里
+    val code = group.code.ifBlank { item.extra("code")?.value.orEmpty() }
 
     Column(
         modifier = Modifier
@@ -60,8 +62,8 @@ fun ItemCard(
                 .clip(RoundedCornerShape(16.dp))
                 .background(PlayerColors.PanelSoft),
         ) {
-            CoverArt(item, imageLoader)
-            if (item.favorite) {
+            CoverArt(cover = group.cover, seed = item.url, imageLoader = imageLoader)
+            if (group.favorite) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -129,7 +131,7 @@ fun ContinueCard(
             .background(PlayerColors.PanelSoft)
             .clickable(onClick = onClick),
     ) {
-        CoverArt(item, imageLoader)
+        CoverArt(cover = item.cover, seed = item.url, imageLoader = imageLoader)
         Box(
             Modifier
                 .fillMaxSize()
@@ -201,15 +203,15 @@ fun ContinueCard(
 }
 
 @Composable
-private fun CoverArt(item: LibraryItem, imageLoader: ImageLoader) {
+private fun CoverArt(cover: String, seed: String, imageLoader: ImageLoader) {
     CoverFallback(
         label = "",
-        seed = item.url,
+        seed = seed,
         modifier = Modifier.fillMaxSize(),
     )
-    if (item.cover.isNotBlank()) {
+    if (cover.isNotBlank()) {
         AsyncImage(
-            model = item.cover,
+            model = cover,
             imageLoader = imageLoader,
             contentDescription = null,
             contentScale = ContentScale.Crop,
@@ -232,7 +234,7 @@ fun RelatedCard(
             .background(PlayerColors.PanelSoft)
             .clickable(onClick = onClick),
     ) {
-        CoverArt(item, imageLoader)
+        CoverArt(cover = item.cover, seed = item.url, imageLoader = imageLoader)
         Box(
             Modifier
                 .fillMaxSize()

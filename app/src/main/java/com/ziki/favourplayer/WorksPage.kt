@@ -23,11 +23,11 @@ import coil.ImageLoader
 fun WorksPage(
     title: String,
     subtitle: String,
-    items: List<LibraryItem>,
+    groups: List<WorkGroup>,
     imageLoader: ImageLoader,
     onBack: () -> Unit,
-    onOpen: (LibraryItem) -> Unit,
-    onPlay: (LibraryItem) -> Unit,
+    onOpen: (WorkGroup) -> Unit,
+    onPlay: (WorkGroup) -> Unit,
 ) {
     SubPage(
         title = title,
@@ -35,7 +35,7 @@ fun WorksPage(
         onBack = onBack,
         scrollable = false,
     ) {
-        if (items.isEmpty()) {
+        if (groups.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
@@ -54,12 +54,12 @@ fun WorksPage(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                gridItems(items, key = { it.id }) { item ->
+                gridItems(groups, key = { it.key }) { group ->
                     ItemCard(
-                        item = item,
+                        group = group,
                         imageLoader = imageLoader,
-                        onClick = { onOpen(item) },
-                        onPlay = { onPlay(item) },
+                        onClick = { onOpen(group) },
+                        onPlay = { onPlay(group) },
                     )
                 }
             }

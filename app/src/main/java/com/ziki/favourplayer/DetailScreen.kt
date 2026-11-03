@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -74,6 +75,9 @@ fun DetailScreen(
     onTagClick: (String) -> Unit,
     related: List<LibraryItem>,
     onOpenRelated: (LibraryItem) -> Unit,
+    // 同一部作品的其他版本，用于详情页切换
+    versions: List<LibraryItem> = emptyList(),
+    onSelectVersion: (LibraryItem) -> Unit = {},
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val meta = rememberDetailMeta(item)
@@ -141,6 +145,11 @@ fun DetailScreen(
                         }
                     }
                     DetailHeading(item = item, meta = meta)
+                    VersionPicker(
+                        versions = versions,
+                        selected = item,
+                        onSelect = onSelectVersion,
+                    )
                     DetailActionColumn(
                         resume = resume,
                         onPlay = onPlay,
@@ -278,6 +287,12 @@ fun DetailScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
             ) {
+                VersionPicker(
+                    versions = versions,
+                    selected = item,
+                    onSelect = onSelectVersion,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
                 DetailActionColumn(
                     resume = resume,
                     onPlay = onPlay,
@@ -324,7 +339,7 @@ private fun rememberDetailMeta(item: LibraryItem): DetailMeta {
     val releaseDate = item.extra("releaseDate")?.value.orEmpty()
     val publisher = item.extra("publisher")?.value.orEmpty()
     return DetailMeta(
-        code = item.extra("code")?.value.orEmpty(),
+        code = Versions.of(item).base.ifBlank { item.extra("code")?.value.orEmpty() },
         actress = item.extra("actress")?.value.orEmpty(),
         releaseDate = releaseDate,
         publisher = publisher,
@@ -349,18 +364,34 @@ private fun DetailHeading(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier) {
-        if (meta.code.isNotBlank()) {
-            Text(
-                text = meta.code,
-                color = PlayerColors.Accent,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                fontSize = 9.5.sp,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(PlayerColors.AccentSoft)
-                    .padding(horizontal = 6.dp, vertical = 3.dp),
-            )
+        val version = Versions.of(item)
+        if (meta.code.isNotBlank() || version.versioned) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (meta.code.isNotBlank()) {
+                    Text(
+                        text = meta.code,
+                        color = PlayerColors.Accent,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 9.5.sp,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(PlayerColors.AccentSoft)
+                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                    )
+                }
+                if (version.versioned) {
+                    Text(
+                        text = version.label,
+                        color = if (version.cnSub) PlayerColors.Accent else PlayerColors.Faint,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
         }
         Text(
             text = item.title.ifBlank { hostOf(item.url).ifBlank { item.url } },
@@ -714,3 +745,70 @@ internal fun openInBrowser(context: Context, url: String) {
 
 private fun hostOf(url: String): String =
     runCatching { Uri.parse(url).host.orEmpty() }.getOrDefault("")
+
+/**
+ * 版本选择条：同一部作品的原版 / 中文字幕 / 无码版本在这里切换，
+ * 「默认」标记的是卡片快捷播放会选中的那一版（中文字幕优先）。
+ */
+@Composable
+private fun VersionPicker(
+    versions: List<LibraryItem>,
+    selected: LibraryItem,
+    onSelect: (LibraryItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val selectedInfo = Versions.of(selected)
+    if (versions.size <= 1 && !selectedInfo.versioned) return
+
+    val primary = Versions.pickPreferred(versions)
+    LazyRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        items(versions, key = { it.id }) { version ->
+            val info = Versions.of(version)
+            val active = version.id == selected.id
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(if (active) PlayerColors.AccentSoft else PlayerColors.PanelSoft)
+                    .border(
+                        1.dp,
+                        if (active) PlayerColors.Accent else PlayerColors.Border,
+                        RoundedCornerShape(9.dp),
+                    )
+                    .clickable(enabled = !active) { onSelect(version) }
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                if (info.cnSub) {
+                    Box(
+                        modifier = Modifier
+                            .size(5.dp)
+                            .clip(CircleShape)
+                            .background(if (active) PlayerColors.Accent else PlayerColors.Faint),
+                    )
+                }
+                Text(
+                    text = info.label,
+                    color = if (active) PlayerColors.Accent else PlayerColors.Muted,
+                    fontSize = 11.5.sp,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 1,
+                )
+                if (versions.size > 1 && primary != null && version.id == primary.id) {
+                    Text(
+                        text = "默认",
+                        color = if (active) PlayerColors.Accent else PlayerColors.Faint,
+                        fontSize = 9.sp,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (active) PlayerColors.AccentLine else PlayerColors.Panel)
+                            .padding(horizontal = 4.dp, vertical = 1.dp),
+                    )
+                }
+            }
+        }
+    }
+}
