@@ -202,12 +202,16 @@ fun SyncSettingsPage(
 }
 
 private fun pullStatusText(state: LibraryUiState): String {
-    val syncedAt = state.lastReceivedAt?.takeIf { it > 0L }
+    val pulledAt = (state.lastPulledAt ?: state.lastReceivedAt)?.takeIf { it > 0L }
+    val dataAt = state.lastReceivedAt?.takeIf { it > 0L }
     return when {
         state.pulling -> "正在拉取…"
         state.pullError != null -> "拉取失败：${state.pullError}"
-        syncedAt != null ->
-            "上次数据：${formatSyncTime(syncedAt)} · ${state.snapshot?.items?.size ?: 0} 条"
+        pulledAt != null -> buildString {
+            append("上次同步：${formatSyncMoment(pulledAt)}")
+            if (dataAt != null) append(" · 数据 ${formatSyncTime(dataAt)}")
+            append(" · ${state.snapshot?.items?.size ?: 0} 条")
+        }
         else -> "尚未拉取"
     }
 }

@@ -28,6 +28,17 @@ class CardScreenshotTest {
 
     private val avatar = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAZUlEQVR42u3QQREAAAQAMBFFFEcrcjh7rMAiu+azECBAgAABAgQIECBAgAABAgQIECBAgAABAgQIECBAgAABAgQIECBAgAABAgQIECBAgAABAgQIECBAgAABAgQIECBAgAABAu5b35ByhuY7u18AAAAASUVORK5CYII="
 
+
+    private fun singleVersionGroup(item: LibraryItem): WorkGroup {
+        val code = Versions.of(item).base
+        return WorkGroup(
+            key = code.ifBlank { "item:${item.id}" },
+            code = code,
+            versions = listOf(item),
+            primary = item,
+        )
+    }
+
     @Test
     fun cardsWithTestData() {
         val loader = ImageLoader.Builder(paparazzi.context).build()
@@ -82,10 +93,10 @@ class CardScreenshotTest {
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
                         Box(Modifier.weight(1f)) {
-                            ItemCard(first, loader, {}, {})
+                            ItemCard(singleVersionGroup(first), loader, {}, {})
                         }
                         Box(Modifier.weight(1f)) {
-                            ItemCard(second, loader, {}, {})
+                            ItemCard(singleVersionGroup(second), loader, {}, {})
                         }
                     }
                     Text(

@@ -344,7 +344,8 @@ private fun SyncCard(
         state.pulling -> "正在拉取…"
         state.pullError != null && state.snapshot != null -> "拉取失败 · 使用缓存"
         state.pullError != null -> "拉取失败"
-        state.lastReceivedAt != null -> "已同步 · ${formatSyncTime(state.lastReceivedAt)}"
+        state.lastPulledAt != null -> "已同步 · ${formatSyncMoment(state.lastPulledAt)}"
+        state.lastReceivedAt != null -> "已同步 · ${formatSyncMoment(state.lastReceivedAt)}"
         else -> "等待拉取"
     }
 
@@ -395,8 +396,13 @@ private fun SyncCard(
                 )
             }
         }
+        val dataAt = state.lastReceivedAt?.takeIf { it > 0L }
         Text(
-            text = "${state.snapshot?.items?.size ?: 0} 部收藏 · 中间服务",
+            text = buildString {
+                append("${state.snapshot?.items?.size ?: 0} 部收藏 · 中间服务")
+                // 数据本身最后一次更新的时间，和上面「本机最近一次同步」不是一回事
+                if (dataAt != null) append(" · 数据更新 ${formatSyncTime(dataAt)}")
+            },
             color = PlayerColors.Muted,
             fontSize = 10.5.sp,
             modifier = Modifier.padding(top = 6.dp),

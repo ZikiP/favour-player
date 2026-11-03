@@ -28,6 +28,13 @@ class SyncStore(context: Context) {
             .apply()
     }
 
+    /** 本机最近一次成功拉取的时刻；0 表示还没成功过 */
+    fun loadLastPulledAt(): Long = prefs.getLong(KEY_LAST_PULLED_AT, 0L)
+
+    fun saveLastPulledAt(timestamp: Long) {
+        prefs.edit().putLong(KEY_LAST_PULLED_AT, timestamp).apply()
+    }
+
     fun loadCached(): LibrarySnapshot? {
         if (!cacheFile.isFile) return null
         return runCatching { SnapshotParser.parse(cacheFile.readText()) }.getOrNull()
@@ -64,6 +71,7 @@ class SyncStore(context: Context) {
     companion object {
         private const val KEY_PULL_URL = "pull_url"
         private const val KEY_PULL_TOKEN = "pull_token"
+        private const val KEY_LAST_PULLED_AT = "last_pulled_at"
         private const val TAG = "FavourPlayer"
     }
 }

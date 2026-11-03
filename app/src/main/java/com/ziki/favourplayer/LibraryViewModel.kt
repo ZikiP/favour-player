@@ -27,6 +27,8 @@ data class LibraryUiState(
     val pullTestMessage: String? = null,
     val pullTestOk: Boolean = false,
     val playback: Map<String, PlaybackProgress> = emptyMap(),
+    /** 本机最近一次成功拉取的时刻（点同步成功就刷新，与数据是否变化无关） */
+    val lastPulledAt: Long? = null,
 )
 
 class LibraryViewModel(app: Application) : AndroidViewModel(app) {
@@ -57,6 +59,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
             pullUrl = pull.url,
             pullToken = pull.token,
             playback = if (clean) emptyMap() else playbackStore.all(),
+            lastPulledAt = if (clean) null else store.loadLastPulledAt().takeIf { it > 0L },
         )
 
         viewModelScope.launch {
@@ -74,13 +77,19 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             snapshotFlow { CleanMode.enabled }.collect { clean ->
                 if (clean) {
-                    state = state.copy(snapshot = null, lastReceivedAt = null, playback = emptyMap())
+                    state = state.copy(
+                        snapshot = null,
+                        lastReceivedAt = null,
+                        lastPulledAt = null,
+                        playback = emptyMap(),
+                    )
                 } else {
                     val restored = store.loadCached()
                     state = state.copy(
                         snapshot = restored,
                         lastReceivedAt = restored?.updatedAt,
                         playback = playbackStore.all(),
+                        lastPulledAt = store.loadLastPulledAt().takeIf { it > 0L },
                     )
                     pullNow(auto = true)
                 }
@@ -127,11 +136,16 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
             }
             result.exceptionOrNull()?.let { if (it is CancellationException) throw it }
             result.onSuccess { pulled ->
+                // 这次拉取成功的时刻，和快照本身的 updatedAt 是两回事：
+                // 数据没变时点同步，这里照样会刷新，界面上就能看到刚同步过
+                val pulledAt = System.currentTimeMillis()
+                store.saveLastPulledAt(pulledAt)
                 state = state.copy(
                     snapshot = pulled.snapshot,
                     lastReceivedAt = pulled.snapshot.updatedAt,
                     pulling = false,
                     pullError = null,
+                    lastPulledAt = pulledAt,
                 )
             }.onFailure { error ->
                 state = state.copy(
