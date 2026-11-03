@@ -718,26 +718,35 @@ fun PlayerScreen(
         }
 
         caption?.let { track ->
-            // 横屏画面高，字号跟着放大一点，否则在手机上看着偏小
-            val displayStyle = if (isLandscape) {
-                subtitleStyle.copy(
+            // 横屏画面高，字号跟着放大一点，否则在手机上看着偏小；
+            // 画中画窗口小，字号、内边距和上移量一起收窄，不然一行字能占满半个窗口
+            val displayStyle = when {
+                isInPip -> subtitleStyle.copy(
+                    fontSize = (subtitleStyle.fontSize * 0.55f).coerceAtLeast(8f),
+                )
+                isLandscape -> subtitleStyle.copy(
                     fontSize = (subtitleStyle.fontSize * 1.2f).coerceAtMost(SubtitleStyle.FONT_MAX),
                 )
-            } else {
-                subtitleStyle
+                else -> subtitleStyle
             }
             SubtitleOverlay(
                 track = track,
                 positionMs = previewMs ?: positionMs,
                 style = displayStyle,
+                compact = isInPip,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = 24.dp)
+                    .padding(horizontal = if (isInPip) 8.dp else 24.dp)
                     // 固定贴在视频画面底边，控件弹出与否都不移动。
                     // 竖屏画面窄，字幕几乎压着画面下沿；横屏留一点离底距离。
+                    // 画中画窗口太小，位置档位的那点偏移就别要了。
                     .padding(
-                        bottom = bottomLetterbox +
-                            ((if (isLandscape) 24 else -10) + subtitleStyle.extraBottomDp()).dp,
+                        bottom = if (isInPip) {
+                            bottomLetterbox + 2.dp
+                        } else {
+                            bottomLetterbox +
+                                ((if (isLandscape) 24 else -10) + subtitleStyle.extraBottomDp()).dp
+                        },
                     ),
             )
         }

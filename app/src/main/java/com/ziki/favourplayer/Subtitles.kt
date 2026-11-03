@@ -568,6 +568,8 @@ fun SubtitleText(
     text: String,
     style: SubtitleStyle,
     modifier: Modifier = Modifier,
+    /** 画中画这类小窗口用：内边距、圆角和阴影一起收窄。 */
+    compact: Boolean = false,
 ) {
     val background = when (style.background) {
         0 -> Color.Transparent
@@ -584,15 +586,18 @@ fun SubtitleText(
             textAlign = TextAlign.Center,
             shadow = Shadow(
                 color = Color.Black,
-                offset = Offset(1.5f, 1.5f),
-                blurRadius = 4f,
+                offset = if (compact) Offset(0.8f, 0.8f) else Offset(1.5f, 1.5f),
+                blurRadius = if (compact) 2f else 4f,
             ),
         ),
         modifier = modifier
-            .widthIn(max = 560.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .widthIn(max = if (compact) 240.dp else 560.dp)
+            .clip(RoundedCornerShape(if (compact) 4.dp else 8.dp))
             .background(background)
-            .padding(horizontal = 11.dp, vertical = 5.dp),
+            .padding(
+                horizontal = if (compact) 5.dp else 11.dp,
+                vertical = if (compact) 2.dp else 5.dp,
+            ),
     )
 }
 
@@ -602,13 +607,15 @@ fun SubtitleOverlay(
     positionMs: Long,
     style: SubtitleStyle,
     modifier: Modifier = Modifier,
+    /** 画中画这类小窗口用：字号和内边距都收一收。 */
+    compact: Boolean = false,
 ) {
     val text = track.textAt(positionMs - style.offsetMs) ?: return
     Box(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center,
     ) {
-        SubtitleText(text = text, style = style)
+        SubtitleText(text = text, style = style, compact = compact)
     }
 }
 
