@@ -103,6 +103,65 @@ fun PlayerScreen(
     var subtitleStyle by remember { mutableStateOf(subtitleStyleStore.load(contentKey)) }
     var showSubtitleSettings by remember { mutableStateOf(false) }
 
+    // —— 字幕跨设备共享（按作品）——
+    // 干净模式跳过上传：避免把看过哪些片暴露到服务端。
+
+    fun uploadSubtitle(name: String, text: String) {
+        if (contentKey.isBlank() || CleanMode.enabled) return
+        val config = SyncStore(context).loadPullConfig()
+        if (config.url.isBlank() || config.token.isBlank()) return
+        val style = subtitleStyle
+        scope.launch(Dispatchers.IO) {
+            SubtitleSync.upload(config, contentKey, name, text, style)
+        }
+    }
+
+    // 只调样式时，正文带本地已有的（没有就留空，服务端保留旧正文）。
+    fun uploadSubtitleStyle() {
+        if (contentKey.isBlank() || CleanMode.enabled) return
+        val config = SyncStore(context).loadPullConfig()
+        if (config.url.isBlank() || config.token.isBlank()) return
+        val style = subtitleStyle
+        scope.launch(Dispatchers.IO) {
+            val local = subtitleStore.loadText(contentKey)
+            SubtitleSync.upload(
+                config, contentKey,
+                local?.first.orEmpty(), local?.second.orEmpty(), style,
+            )
+        }
+    }
+
+    fun deleteSharedSubtitle() {
+        if (contentKey.isBlank() || CleanMode.enabled) return
+        val config = SyncStore(context).loadPullConfig()
+        if (config.url.isBlank() || config.token.isBlank()) return
+        scope.launch(Dispatchers.IO) { SubtitleSync.delete(config, contentKey) }
+    }
+
+    // 先加载本地已有字幕（私有副本，其次旧 URI 记录），离线也能秒显。
+    suspend fun loadLocalSubtitle() {
+        val cached = subtitleStore.loadText(contentKey)
+        if (cached != null) {
+            val cues = withContext(Dispatchers.IO) { SubtitleParser.parse(cached.second) }
+            if (cues.isNotEmpty()) {
+                caption = SubtitleTrack(cached.first, cues)
+                return
+            }
+        }
+        val saved = subtitleStore.load(contentKey) ?: return
+        val (uri, name) = saved
+        val raw = withContext(Dispatchers.IO) {
+            runCatching { SubtitleLoader.read(context, uri) }.getOrNull()
+        } ?: return
+        val cues = withContext(Dispatchers.IO) { SubtitleParser.parse(raw) }
+        if (cues.isEmpty()) {
+            subtitleStore.clear(contentKey)
+        } else {
+            caption = SubtitleTrack(name, cues)
+            subtitleStore.saveText(contentKey, name, raw)
+        }
+    }
+
     fun applySubtitleFile(uri: Uri) {
         scope.launch {
             val result = withContext(Dispatchers.IO) {
@@ -128,6 +187,8 @@ fun PlayerScreen(
                     // 存一份到私有目录，之后不再依赖外部 URI 的授权
                     subtitleStore.saveText(contentKey, name, raw)
                 }
+                // 挂载后把正文和当前样式共享到中间服务，别的设备打开能自动加载
+                uploadSubtitle(name, raw)
                 Toast.makeText(context, "已加载 $name", Toast.LENGTH_SHORT).show()
             }.onFailure {
                 Log.e("FavourPlayer", "subtitle failed", it)
@@ -311,28 +372,25 @@ fun PlayerScreen(
     LaunchedEffect(contentKey) {
         if (contentKey.isBlank()) return@LaunchedEffect
 
-        // 先读私有副本，完全不依赖外部 URI 的授权
-        val cached = subtitleStore.loadText(contentKey)
-        if (cached != null) {
-            val cues = withContext(Dispatchers.IO) { SubtitleParser.parse(cached.second) }
+        // 先读本地已有字幕：离线/无网也能立即显示，不依赖中间服务
+        loadLocalSubtitle()
+
+        // 再拉共享字幕：远端优先，拉到就覆盖本地（正文 + 整份样式）
+        val config = SyncStore(context).loadPullConfig()
+        if (config.url.isBlank() || config.token.isBlank()) return@LaunchedEffect
+        if (CleanMode.enabled) return@LaunchedEffect
+        val remote = withContext(Dispatchers.IO) { SubtitleSync.download(config, contentKey) }
+            ?: return@LaunchedEffect
+        if (remote.text.isNotBlank()) {
+            val cues = withContext(Dispatchers.IO) { SubtitleParser.parse(remote.text) }
             if (cues.isNotEmpty()) {
-                caption = SubtitleTrack(cached.first, cues)
-                return@LaunchedEffect
+                caption = SubtitleTrack(remote.name.ifBlank { "共享字幕" }, cues)
+                subtitleStore.saveText(contentKey, remote.name, remote.text)
             }
         }
-
-        // 老记录只有 URI，读成功后顺手转存一份副本
-        val saved = subtitleStore.load(contentKey) ?: return@LaunchedEffect
-        val (uri, name) = saved
-        val raw = withContext(Dispatchers.IO) {
-            runCatching { SubtitleLoader.read(context, uri) }.getOrNull()
-        } ?: return@LaunchedEffect
-        val cues = withContext(Dispatchers.IO) { SubtitleParser.parse(raw) }
-        if (cues.isEmpty()) {
-            subtitleStore.clear(contentKey)
-        } else {
-            caption = SubtitleTrack(name, cues)
-            subtitleStore.saveText(contentKey, name, raw)
+        remote.style?.let { style ->
+            subtitleStyle = style
+            subtitleStyleStore.save(contentKey, style)
         }
     }
 
@@ -676,6 +734,7 @@ fun PlayerScreen(
                 onClearSubtitle = {
                     caption = null
                     subtitleStore.clear(contentKey)
+                    deleteSharedSubtitle()
                 },
                 onOpenSubtitleSettings = { showSubtitleSettings = true },
                 controlBottom = controlBottomDp,
@@ -733,6 +792,7 @@ fun PlayerScreen(
                 onSave = { updated ->
                     subtitleStyle = updated
                     subtitleStyleStore.save(contentKey, updated)
+                    uploadSubtitleStyle()
                 },
                 onBack = {
                     showSubtitleSettings = false
