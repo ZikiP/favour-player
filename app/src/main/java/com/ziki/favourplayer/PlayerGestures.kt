@@ -1,6 +1,7 @@
 package com.ziki.favourplayer
 
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -28,12 +29,32 @@ fun Modifier.playerGestures(
             onDoubleTap = { offset ->
                 if (!blocked(offset.y)) onDoubleTap(offset.x < size.width / 2f)
             },
-            onLongPress = { offset ->
-                if (!blocked(offset.y)) onLongPressChange(true)
+        )
+    }
+    // 长按 2×：detectDragGesturesAfterLongPress 在长按超时才进入拖拽，
+    // onDragEnd 会在松手时触发，正好用来把倍速恢复回来。
+    // 之前把恢复写在 detectTapGestures 的 onPress 里，但长按会中断
+    // tryAwaitRelease，那段代码永远走不到，导致松手后一直停在 2 倍速。
+    .pointerInput(blockBottomPx) {
+        fun blocked(y: Float): Boolean =
+            blockBottomPx > 0f && y > size.height - blockBottomPx
+
+        var longPressed = false
+        detectDragGesturesAfterLongPress(
+            onDragStart = { offset ->
+                if (!blocked(offset.y)) {
+                    longPressed = true
+                    onLongPressChange(true)
+                }
             },
-            onPress = { offset ->
-                tryAwaitRelease()
-                if (!blocked(offset.y)) onLongPressChange(false)
+            onDrag = { change, _ -> change.consume() },
+            onDragEnd = {
+                if (longPressed) onLongPressChange(false)
+                longPressed = false
+            },
+            onDragCancel = {
+                if (longPressed) onLongPressChange(false)
+                longPressed = false
             },
         )
     }

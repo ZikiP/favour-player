@@ -43,10 +43,47 @@ data class SubtitleTrack(
     val name: String,
     val cues: List<SubtitleCue>,
 ) {
+    // cues 按 startMs 升序（parseTimed / parseAss 都 sortedBy startMs）。
+    // 最大单条时长用来圈定「当前可能活跃」的窗口，避免每次都全量扫描。
+    private val maxDurationMs: Long by lazy {
+        cues.maxOfOrNull { it.endMs - it.startMs } ?: 0L
+    }
+
     /** 同一时刻可能有多条（双语字幕），全部拼上。 */
     fun textAt(positionMs: Long): String? {
-        val hit = cues.filter { positionMs >= it.startMs && positionMs < it.endMs }
-        return if (hit.isEmpty()) null else hit.joinToString("\n") { it.text }
+        if (cues.isEmpty() || maxDurationMs <= 0L) return null
+        // 二分定位最后一个 startMs <= positionMs 的下标。
+        val upper = lastStartAtMost(positionMs)
+        if (upper < 0) return null
+        // endMs <= startMs + maxDurationMs，所以 endMs > positionMs 的 cue，
+        // 其 startMs 必然 > positionMs - maxDurationMs，只在这个小窗口里找即可。
+        val lower = lastStartAtMost(positionMs - maxDurationMs)
+        val sb = StringBuilder()
+        for (i in (lower + 1)..upper) {
+            val cue = cues[i]
+            if (positionMs < cue.endMs) {
+                if (sb.isNotEmpty()) sb.append('\n')
+                sb.append(cue.text)
+            }
+        }
+        return sb.toString().ifEmpty { null }
+    }
+
+    /** 返回最后一个 startMs <= positionMs 的下标，没有则 -1。 */
+    private fun lastStartAtMost(positionMs: Long): Int {
+        var lo = 0
+        var hi = cues.size - 1
+        var ans = -1
+        while (lo <= hi) {
+            val mid = (lo + hi) ushr 1
+            if (cues[mid].startMs <= positionMs) {
+                ans = mid
+                lo = mid + 1
+            } else {
+                hi = mid - 1
+            }
+        }
+        return ans
     }
 }
 

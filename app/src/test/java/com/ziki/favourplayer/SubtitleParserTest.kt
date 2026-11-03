@@ -123,6 +123,36 @@ class SubtitleParserTest {
         assertEquals("第 1 句中文字幕内容，这里有一些标点符号和英文 test 以及数字 123。", cues[0].text)
     }
 
+    @Test
+    fun textAtFindsCueByBinarySearch() {
+        val track = SubtitleTrack(
+            name = "t",
+            cues = listOf(
+                SubtitleCue(1_000, 3_000, "第一句"),
+                SubtitleCue(4_000, 6_000, "第二句"),
+            ),
+        )
+        assertEquals("第一句", track.textAt(2_000))
+        assertEquals("第二句", track.textAt(5_000))
+        // endMs 是开区间，且范围外都返回 null
+        assertEquals(null, track.textAt(3_000))
+        assertEquals(null, track.textAt(0))
+        assertEquals(null, track.textAt(7_000))
+    }
+
+    @Test
+    fun textAtJoinsOverlappingBilingualCues() {
+        val track = SubtitleTrack(
+            name = "t",
+            cues = listOf(
+                SubtitleCue(1_000, 4_000, "中文"),
+                SubtitleCue(1_000, 4_000, "英文"),
+            ),
+        )
+        assertEquals("中文\n英文", track.textAt(2_000))
+        assertEquals(null, track.textAt(500))
+    }
+
     private fun timecode(totalSeconds: Int): String {
         val h = totalSeconds / 3600
         val m = totalSeconds % 3600 / 60

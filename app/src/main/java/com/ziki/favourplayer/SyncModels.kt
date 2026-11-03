@@ -22,28 +22,44 @@ data class LibraryItem(
     val cover: String,
     val createdAt: Long,
 ) {
-    fun extra(key: String): LibraryExtra? = extras.firstOrNull { it.key == key }
+    // extras 通常是几条到十几条，associateBy 一次索引比反复 firstOrNull 更省。
+    private val extraMap: Map<String, LibraryExtra> by lazy { extras.associateBy { it.key } }
 
-    fun actressNames(): List<String> =
+    fun extra(key: String): LibraryExtra? = extraMap[key]
+
+    // 这些派生值在列表/筛选/详情里会被反复调用，而每次都要 split + 正则 + distinctBy。
+    // 用 lazy 缓存一次，避免在搜索、合集汇总、相关推荐等热路径上重复计算。
+    private val actressNamesCache: List<String> by lazy {
         splitLabels(extra("actress")?.value)
             .map(::baseActressName)
             .filter { it.isNotEmpty() }
             .distinctBy { it.lowercase() }
+    }
 
-    fun genres(): List<String> =
+    fun actressNames(): List<String> = actressNamesCache
+
+    private val genresCache: List<String> by lazy {
         splitLabels(extra("genres")?.value)
+    }
 
-    fun series(): String =
-        extra("series")?.value.orEmpty().trim()
+    fun genres(): List<String> = genresCache
 
-    fun runtime(): String =
-        extra("runtime")?.value.orEmpty().trim()
+    private val seriesCache: String by lazy { extra("series")?.value.orEmpty().trim() }
 
-    fun displayLabels(): List<String> =
-        (genres() + tags)
+    fun series(): String = seriesCache
+
+    private val runtimeCache: String by lazy { extra("runtime")?.value.orEmpty().trim() }
+
+    fun runtime(): String = runtimeCache
+
+    private val displayLabelsCache: List<String> by lazy {
+        (genresCache + tags)
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .distinctBy { it.lowercase() }
+    }
+
+    fun displayLabels(): List<String> = displayLabelsCache
 }
 
 data class ActressMeta(
