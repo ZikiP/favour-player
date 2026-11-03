@@ -80,7 +80,9 @@ jobs:
           VERSION_NAME: ${{ steps.version.outputs.name }}
           VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
+          APK="favour-player-v${VERSION_NAME}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$APK"
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
-            --notes "Test release ${VERSION_NAME} (code ${VERSION_CODE})." \
-            app/build/outputs/apk/debug/app-debug.apk
+            --notes "正式版 ${VERSION_NAME} (code ${VERSION_CODE})." \
+            "$APK"
