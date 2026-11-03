@@ -55,15 +55,20 @@ object PullClient {
                 runCatching { SnapshotParser.parse(raw) }
                     .getOrElse { throw PullException("中间服务数据格式不正确") }
 
-                // 服务端的全局干净模式：任一端开启，所有端都看不到收藏
+                // 服务端的全局干净模式：同步时以服务端为准
                 val cleanMode = runCatching {
                     JSONObject(raw).optBoolean("cleanMode")
                 }.getOrDefault(false)
                 CleanMode.setRemote(cleanMode)
 
                 val saved = if (cleanMode) {
-                    // 干净模式返回的是空快照，别拿它把本地缓存覆盖掉
-                    SnapshotParser.parse(raw)
+                    if (CleanMode.enabled) {
+                        // 干净模式返回的是空快照，别拿它把本地缓存覆盖掉
+                        SnapshotParser.parse(raw)
+                    } else {
+                        // 用户在本机关掉了干净模式：继续用本地缓存的内容
+                        SyncStore(context).loadCached() ?: SnapshotParser.parse(raw)
+                    }
                 } else {
                     try {
                         SyncStore(context).saveSnapshot(raw)

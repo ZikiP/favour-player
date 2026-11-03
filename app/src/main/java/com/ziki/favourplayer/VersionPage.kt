@@ -13,6 +13,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,7 +34,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun VersionPage(onBack: () -> Unit) {
     val context = LocalContext.current
-    var localClean by remember { mutableStateOf(CleanMode.localEnabled) }
+    // 干净模式：默认跟服务端，用户手动改过就以本机为准
     val scope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
     var checked by remember { mutableStateOf(false) }
@@ -196,9 +197,9 @@ fun VersionPage(onBack: () -> Unit) {
                     )
                 }
                 Switch(
-                    checked = localClean,
+                    checked = CleanMode.enabled,
                     onCheckedChange = { value ->
-                        localClean = value
+                        // 手动改过就算本地覆盖：离线也能随时开关，同步不会改回来
                         CleanMode.set(context, value)
                     },
                     colors = SwitchDefaults.colors(
@@ -219,12 +220,29 @@ fun VersionPage(onBack: () -> Unit) {
             )
             if (CleanMode.remoteEnabled) {
                 Text(
-                    text = "服务端已开启全局干净模式，所有设备都看不到收藏。" +
-                        "这个开关只能在网页端关闭。",
+                    text = if (CleanMode.overridden) {
+                        "服务端开着干净模式，你现在按本机设置走（已覆盖）。" +
+                            "下面的按钮可以改回跟随服务端。"
+                    } else {
+                        "服务端开着干净模式，同步后按服务端走。" +
+                            "想只看这台设备，可以直接在这里关掉。"
+                    },
                     color = PlayerColors.Accent,
                     fontSize = 10.5.sp,
                     lineHeight = 16.sp,
                 )
+            } else if (CleanMode.overridden) {
+                Text(
+                    text = "当前按本机设置走（已覆盖服务端），点下面的按钮可以改回跟随服务端。",
+                    color = PlayerColors.Accent,
+                    fontSize = 10.5.sp,
+                    lineHeight = 16.sp,
+                )
+            }
+            if (CleanMode.overridden) {
+                TextButton(onClick = { CleanMode.followServer(context) }) {
+                    Text("跟随服务端", color = PlayerColors.Accent, fontSize = 11.sp)
+                }
             }
         }
     }

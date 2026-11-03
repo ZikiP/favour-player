@@ -25,6 +25,7 @@ import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PictureInPicture
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Replay10
 import androidx.compose.material.icons.automirrored.rounded.RotateRight
@@ -75,6 +76,7 @@ fun PlayerControls(
     onSpeedSelected: (Float) -> Unit,
     onQualitySelected: (QualityOption?) -> Unit,
     onRotate: () -> Unit,
+    onEnterPip: () -> Unit = {},
     onSkipBack: () -> Unit,
     onSkipForward: () -> Unit,
     topPadding: androidx.compose.ui.unit.Dp = 14.dp,
@@ -120,6 +122,8 @@ fun PlayerControls(
                 }
             }
             PlayerIconButton(Icons.AutoMirrored.Rounded.OpenInNew, "打开原页", onOpenOriginal)
+            Spacer(Modifier.width(6.dp))
+            PlayerIconButton(Icons.Rounded.PictureInPicture, "画中画", onEnterPip)
             Spacer(Modifier.width(6.dp))
             SubtitleButton(
                 active = subtitleActive,

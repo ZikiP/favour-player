@@ -1,8 +1,15 @@
 package com.ziki.favourplayer
 
+import android.app.PendingIntent
+import android.app.PictureInPictureParams
+import android.app.RemoteAction
 import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.drawable.Icon
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.util.Rational
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -33,14 +40,23 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 class PlayerActivity : ComponentActivity() {
+
+    /** 是否处于画中画；Compose 要跟着它决定要不要显示自定义控件。 */
+    private var inPip by mutableStateOf(false)
+
+    /** 播放器状态快照，用来算画中画比例和系统按钮图标。 */
+    private var playback by mutableStateOf(PipPlayback())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
+
+        PipBridge.closeAction = { finish() }
 
         val pageUrl = urlFromIntent(intent).orEmpty()
         val fromStart = intent.getBooleanExtra(EXTRA_FROM_START, false)
@@ -81,6 +97,9 @@ class PlayerActivity : ComponentActivity() {
                         contentKey = pageUrl,
                         fromStart = fromStart,
                         onBack = { finish() },
+                        isInPip = inPip,
+                        onEnterPip = { enterPip() },
+                        onPlaybackChanged = { updatePlayback(it) },
                     )
                 }
             }
@@ -91,6 +110,92 @@ class PlayerActivity : ComponentActivity() {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemBars()
     }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        inPip = isInPictureInPictureMode
+        if (isInPictureInPictureMode) hideSystemBars()
+    }
+
+    /** 播放中退到后台就自动进画中画，别把声音丢在后台。 */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (!inPip && playback.isPlaying) enterPip()
+    }
+
+    override fun onDestroy() {
+        PipBridge.player = null
+        PipBridge.closeAction = null
+        super.onDestroy()
+    }
+
+    private fun updatePlayback(value: PipPlayback) {
+        playback = value
+        PipBridge.player = value.player
+        if (inPip) {
+            runCatching { setPictureInPictureParams(buildPipParams()) }
+                .onFailure { Log.w(TAG, "update pip params failed", it) }
+        }
+    }
+
+    private fun enterPip() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (inPip) return
+        runCatching {
+            val params = buildPipParams()
+            setPictureInPictureParams(params)
+            enterPictureInPictureMode(params)
+        }.onFailure { Log.w(TAG, "enter picture-in-picture failed", it) }
+    }
+
+    private fun buildPipParams(): PictureInPictureParams {
+        val builder = PictureInPictureParams.Builder()
+        val width = playback.width
+        val height = playback.height
+        if (width > 0 && height > 0) {
+            // 系统限定比例范围，太极端的竖屏或超宽画面要夹一下
+            val ratio = (width.toFloat() / height.toFloat()).coerceIn(1f / 2.39f, 2.39f)
+            builder.setAspectRatio(Rational((ratio * 1000f).roundToInt(), 1000))
+        }
+        builder.setActions(remoteActions())
+        return builder.build()
+    }
+
+    /** 画中画窗口里的系统按钮：播放/暂停，外加关闭。 */
+    private fun remoteActions(): List<RemoteAction> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return emptyList()
+        val playing = playback.isPlaying
+        val toggle = RemoteAction(
+            Icon.createWithResource(
+                this,
+                if (playing) R.drawable.ic_pip_pause else R.drawable.ic_pip_play,
+            ),
+            if (playing) "暂停" else "播放",
+            if (playing) "暂停播放" else "继续播放",
+            pipPendingIntent(
+                if (playing) PipBridge.ACTION_PAUSE else PipBridge.ACTION_PLAY,
+                1,
+            ),
+        )
+        val close = RemoteAction(
+            Icon.createWithResource(this, R.drawable.ic_pip_close),
+            "关闭",
+            "关闭画中画",
+            pipPendingIntent(PipBridge.ACTION_CLOSE, 2),
+        )
+        return listOf(toggle, close)
+    }
+
+    private fun pipPendingIntent(action: String, requestCode: Int): PendingIntent =
+        PendingIntent.getBroadcast(
+            this,
+            requestCode,
+            Intent(this, PipReceiver::class.java).setAction(action),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
 
     private fun hideSystemBars() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -116,6 +221,7 @@ class PlayerActivity : ComponentActivity() {
     companion object {
         const val EXTRA_PAGE_URL = "page_url"
         const val EXTRA_FROM_START = "from_start"
+        private const val TAG = "FavourPlayer"
     }
 }
 

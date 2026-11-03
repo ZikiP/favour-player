@@ -43,6 +43,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,6 +82,12 @@ fun PlayerScreen(
     contentKey: String,
     fromStart: Boolean,
     onBack: () -> Unit,
+    /** 是否处于画中画：画中画里只留画面和字幕，自定义控件全部隐藏。 */
+    isInPip: Boolean = false,
+    /** 点顶栏「画中画」按钮 */
+    onEnterPip: () -> Unit = {},
+    /** 把播放器状态同步给 Activity，用来算画中画比例和系统按钮。 */
+    onPlaybackChanged: (PipPlayback) -> Unit = {},
 ) {
     val context = LocalContext.current
     val activity = context as Activity
@@ -224,6 +231,14 @@ fun PlayerScreen(
     var selectedHeight by remember { mutableIntStateOf(-1) }
     // 视频画面比例，用来把字幕贴到画面底边而不是屏幕底边
     var videoAspect by remember { mutableFloatStateOf(16f / 9f) }
+    // 画中画要用真实画面比例，单独记一份宽高
+    var videoWidth by remember { mutableIntStateOf(0) }
+    var videoHeight by remember { mutableIntStateOf(0) }
+    val reportPlayback by rememberUpdatedState(onPlaybackChanged)
+
+    fun reportPipState() {
+        reportPlayback(PipPlayback(player, videoWidth, videoHeight, isPlaying))
+    }
 
     fun saveProgress() {
         if (contentKey.isBlank()) return
@@ -289,6 +304,7 @@ fun PlayerScreen(
             override fun onIsPlayingChanged(playing: Boolean) {
                 Log.i("FavourPlayer", "isPlaying=$playing")
                 isPlaying = playing
+                reportPipState()
                 if (!playing) saveProgress()
             }
 
@@ -316,7 +332,12 @@ fun PlayerScreen(
                 val rotated = videoSize.unappliedRotationDegrees % 180 != 0
                 val width = if (rotated) videoSize.height else videoSize.width
                 val height = if (rotated) videoSize.width else videoSize.height
-                if (width > 0 && height > 0) videoAspect = width.toFloat() / height
+                if (width > 0 && height > 0) {
+                    videoAspect = width.toFloat() / height
+                    videoWidth = width
+                    videoHeight = height
+                }
+                reportPipState()
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -328,7 +349,10 @@ fun PlayerScreen(
             }
         }
         player.addListener(listener)
-        onDispose { player.removeListener(listener) }
+        onDispose {
+            player.removeListener(listener)
+            reportPlayback(PipPlayback())
+        }
     }
 
     LaunchedEffect(player, contentKey) {
@@ -631,7 +655,7 @@ fun PlayerScreen(
             HudPill(current, Modifier.align(Alignment.Center))
         }
 
-        if (showHints && !locked && errorMessage == null) {
+        if (showHints && !locked && errorMessage == null && !isInPip) {
             Text(
                 text = "双击两侧 ±${playerPrefs.doubleTapMs / 1000}s · 长按 2×",
                 color = Color.White.copy(alpha = 0.7f),
@@ -662,7 +686,7 @@ fun PlayerScreen(
             }
         }
 
-        if (locked) {
+        if (locked && !isInPip) {
             Row(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -718,7 +742,7 @@ fun PlayerScreen(
             )
         }
 
-        if (controlsVisible && !locked && errorMessage == null) {
+        if (controlsVisible && !locked && errorMessage == null && !isInPip) {
             PlayerControls(
                 title = stream.title,
                 subtitle = subtitle,
@@ -779,6 +803,7 @@ fun PlayerScreen(
                     }
                     touch()
                 },
+                onEnterPip = onEnterPip,
                 onSkipBack = { seekTo(player.currentPosition - 10_000L) },
                 onSkipForward = { seekTo(player.currentPosition + 10_000L) },
                 modifier = Modifier.fillMaxSize(),
