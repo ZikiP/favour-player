@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.json.JSONObject
@@ -617,6 +618,28 @@ fun SubtitleOverlay(
     ) {
         SubtitleText(text = text, style = style, compact = compact)
     }
+}
+
+/**
+ * 字幕距离底边的距离。
+ *
+ * bottomLetterbox 是视频按 FIT 缩放后下边那条黑边的高度，窗口很矮时它会是负的
+ * （视频比窗口还高），再加上竖屏那 -10dp 就可能算出负数，
+ * 而 Compose 的 padding 不接受负值 —— 直接抛 IllegalArgumentException。
+ * 所以这里统一夹到 0 以上。
+ */
+fun subtitleBottomPadding(
+    bottomLetterbox: Dp,
+    isLandscape: Boolean,
+    isInPip: Boolean,
+    extraBottomDp: Int,
+): Dp {
+    val raw = if (isInPip) {
+        bottomLetterbox + 2.dp
+    } else {
+        bottomLetterbox + ((if (isLandscape) 24 else -10) + extraBottomDp).dp
+    }
+    return raw.coerceAtLeast(0.dp)
 }
 
 /** 位置档位对应的额外上移距离，叠在基础边距之上。 */

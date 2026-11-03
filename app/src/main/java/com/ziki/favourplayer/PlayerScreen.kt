@@ -741,12 +741,12 @@ fun PlayerScreen(
                     // 竖屏画面窄，字幕几乎压着画面下沿；横屏留一点离底距离。
                     // 画中画窗口太小，位置档位的那点偏移就别要了。
                     .padding(
-                        bottom = if (isInPip) {
-                            bottomLetterbox + 2.dp
-                        } else {
-                            bottomLetterbox +
-                                ((if (isLandscape) 24 else -10) + subtitleStyle.extraBottomDp()).dp
-                        },
+                        bottom = subtitleBottomPadding(
+                            bottomLetterbox = bottomLetterbox,
+                            isLandscape = isLandscape,
+                            isInPip = isInPip,
+                            extraBottomDp = subtitleStyle.extraBottomDp(),
+                        ),
                     ),
             )
         }
