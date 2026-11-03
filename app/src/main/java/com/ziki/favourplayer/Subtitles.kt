@@ -323,6 +323,19 @@ class SubtitleStore(context: Context) {
         return prefs.getString(nameKey(key), "").orEmpty() to text
     }
 
+    /**
+     * 服务端这份共享字幕的最后更新时间。
+     *
+     * 点同步时拿它和服务端清单比一比，没变就不重复下载、不重写文件。
+     */
+    fun sharedAt(key: String): Long =
+        if (key.isBlank()) 0L else prefs.getLong(sharedAtKey(key), 0L)
+
+    fun saveSharedAt(key: String, at: Long) {
+        if (key.isBlank()) return
+        prefs.edit().putLong(sharedAtKey(key), at).apply()
+    }
+
     fun clear(key: String) {
         if (key.isBlank()) return
         prefs.getString(textKey(key), null)?.let { name ->
@@ -332,6 +345,7 @@ class SubtitleStore(context: Context) {
             .remove(uriKey(key))
             .remove(nameKey(key))
             .remove(textKey(key))
+            .remove(sharedAtKey(key))
             .apply()
     }
 
@@ -343,6 +357,7 @@ class SubtitleStore(context: Context) {
     private fun uriKey(key: String) = "$key\u0000uri"
     private fun nameKey(key: String) = "$key\u0000name"
     private fun textKey(key: String) = "$key\u0000text"
+    private fun sharedAtKey(key: String) = "$key\u0000sharedAt"
 }
 
 object SubtitleLoader {

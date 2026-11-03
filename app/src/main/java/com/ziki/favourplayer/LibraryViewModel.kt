@@ -29,6 +29,10 @@ data class LibraryUiState(
     val playback: Map<String, PlaybackProgress> = emptyMap(),
     /** 本机最近一次成功拉取的时刻（点同步成功就刷新，与数据是否变化无关） */
     val lastPulledAt: Long? = null,
+    /** 本次拉取顺带同步回来的字幕数量 */
+    val subtitleSyncedCount: Int = 0,
+    /** 字幕同步完成的时刻，用于界面区分「这次带回来多少」 */
+    val subtitleSyncedAt: Long? = null,
 )
 
 class LibraryViewModel(app: Application) : AndroidViewModel(app) {
@@ -44,6 +48,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private var pullJob: Job? = null
+    private var subtitleJob: Job? = null
     private var lastPullAttemptAt = 0L
 
     var state by mutableStateOf(LibraryUiState())
@@ -147,12 +152,41 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
                     pullError = null,
                     lastPulledAt = pulledAt,
                 )
+                // 快照拉完再顺带把服务端已共享的字幕落到本地：
+                // 手机上调好的偏移和样式，另一台设备点一次同步就都有了
+                syncSubtitles(config, pulled.snapshot)
             }.onFailure { error ->
                 state = state.copy(
                     pulling = false,
                     pullError = error.message ?: "拉取失败",
                 )
             }
+        }
+    }
+
+    /**
+     * 点同步时把服务端已有的共享字幕全部拉回本地。
+     *
+     * 只处理本机收藏里出现的作品（服务端 key 是作品 URL 的摘要，按 URL 反查），
+     * 失败不影响收藏本身的同步结果，只是数量上不体现。
+     */
+    private fun syncSubtitles(config: PullConfig, snapshot: LibrarySnapshot) {
+        if (CleanMode.enabled) return
+        val urls = snapshot.items.map { it.url }.filter { it.isNotBlank() }
+        if (urls.isEmpty()) return
+        if (subtitleJob?.isActive == true) return
+        subtitleJob = viewModelScope.launch {
+            val subtitleStore = SubtitleStore(getApplication())
+            val styleStore = SubtitleStyleStore(getApplication())
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    SubtitleSync.syncAll(config, urls, subtitleStore, styleStore)
+                }.getOrNull()
+            } ?: return@launch
+            state = state.copy(
+                subtitleSyncedCount = result.updated,
+                subtitleSyncedAt = System.currentTimeMillis(),
+            )
         }
     }
 

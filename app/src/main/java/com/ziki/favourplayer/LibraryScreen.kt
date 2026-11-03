@@ -1232,12 +1232,19 @@ private fun syncStatusText(state: LibraryUiState): String {
     if (state.pullUrl.isBlank() || state.pullToken.isBlank()) return "等待配置中间服务"
     // 用本机拉取成功的时刻：点一次同步就会变，和数据本身有没有更新无关
     val syncedAt = (state.lastPulledAt ?: state.lastReceivedAt)?.takeIf { it > 0L }
-    return when {
+    val base = when {
         state.pulling -> "正在拉取…"
         state.pullError != null && state.snapshot != null -> "拉取失败 · 使用缓存"
         state.pullError != null -> "拉取失败"
         syncedAt != null -> "已同步 ${formatSyncMoment(syncedAt)}"
         else -> "等待拉取"
+    }
+    // 同步顺带带回来的字幕数量，>0 时才补一句，避免平时挤占这一行
+    val subtitles = state.subtitleSyncedCount
+    return if (state.subtitleSyncedAt != null && subtitles > 0) {
+        "$base · 字幕 $subtitles 部"
+    } else {
+        base
     }
 }
 

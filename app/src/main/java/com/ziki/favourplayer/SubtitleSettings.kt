@@ -49,10 +49,16 @@ fun SubtitleSettingsPage(
 ) {
     var style by remember { mutableStateOf(initial) }
 
+    // 返回时也提交改动：以前只有点右上角「保存」才生效，
+    // 调完偏移直接返回会整份丢掉，看起来像「设置了却没同步」。
+    fun commitIfChanged() {
+        if (style != initial) onSave(style)
+    }
+
     SubPage(
         title = "字幕设置",
         subtitle = subtitle,
-        onBack = onBack,
+        onBack = { commitIfChanged(); onBack() },
         actions = {
             TextButton(onClick = { onSave(style); onBack() }) {
                 Text(

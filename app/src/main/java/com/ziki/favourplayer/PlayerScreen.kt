@@ -114,28 +114,44 @@ fun PlayerScreen(
     // —— 字幕跨设备共享（按作品）——
     // 干净模式跳过上传：避免把看过哪些片暴露到服务端。
 
+    // 上传失败只提示一次，别在播放过程中反复弹
+    val uploadWarned = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+
+    fun notifyUploadFailed() {
+        if (!uploadWarned.compareAndSet(false, true)) return
+        activity.runOnUiThread {
+            Toast.makeText(
+                context,
+                "字幕没能共享到服务端：可能是干净模式开着，或中间服务没连上",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+
     fun uploadSubtitle(name: String, text: String) {
         if (contentKey.isBlank() || CleanMode.enabled) return
         val config = SyncStore(context).loadPullConfig()
         if (config.url.isBlank() || config.token.isBlank()) return
         val style = subtitleStyle
         scope.launch(Dispatchers.IO) {
-            SubtitleSync.upload(config, contentKey, name, text, style)
+            if (!SubtitleSync.upload(config, contentKey, name, text, style)) {
+                notifyUploadFailed()
+            }
         }
     }
 
     // 只调样式时，正文带本地已有的（没有就留空，服务端保留旧正文）。
-    fun uploadSubtitleStyle() {
+    fun uploadSubtitleStyle(style: SubtitleStyle) {
         if (contentKey.isBlank() || CleanMode.enabled) return
         val config = SyncStore(context).loadPullConfig()
         if (config.url.isBlank() || config.token.isBlank()) return
-        val style = subtitleStyle
         scope.launch(Dispatchers.IO) {
             val local = subtitleStore.loadText(contentKey)
-            SubtitleSync.upload(
+            val ok = SubtitleSync.upload(
                 config, contentKey,
                 local?.first.orEmpty(), local?.second.orEmpty(), style,
             )
+            if (!ok) notifyUploadFailed()
         }
     }
 
@@ -847,7 +863,7 @@ fun PlayerScreen(
                 onSave = { updated ->
                     subtitleStyle = updated
                     subtitleStyleStore.save(contentKey, updated)
-                    uploadSubtitleStyle()
+                    uploadSubtitleStyle(updated)
                 },
                 onBack = {
                     showSubtitleSettings = false
