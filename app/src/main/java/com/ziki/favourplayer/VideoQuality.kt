@@ -57,29 +57,44 @@ private class SharpenShaderProgram(
         throw VideoFrameProcessingException(error)
     }
 
-    override fun configure(inputWidth: Int, inputHeight: Int): Size = Size(inputWidth, inputHeight)
+    /** 输出纹理尺寸在 configure 之后才确定，drawFrame 时用它算 texel 大小。 */
+    private var outputWidth = 1
+    private var outputHeight = 1
 
+    override fun configure(inputWidth: Int, inputHeight: Int): Size {
+        // 输出尺寸就是输入尺寸：锐化不做缩放
+        outputWidth = inputWidth
+        outputHeight = inputHeight
+        return Size(inputWidth, inputHeight)
+    }
+
+    /**
+     * 绘制到 [BaseGlShaderProgram] 已经准备好的输出纹理上。
+     *
+     * 这里**不能**再调 `useOutputTexture()`：父类在调 drawFrame 之前已经从
+     * 输出纹理池里取好了一个纹理并绑定了 FBO，池容量只有 1，再取一次必然抛
+     * 「Textures are all in use」。同理也不能自己调 onOutputFrameAvailable()，
+     * 父类会在 drawFrame 返回后统一把纹理交给下游。
+     *
+     * 官方 AlphaScaleShaderProgram 就是这个写法：只管画，画完即返回。
+     */
     override fun drawFrame(inputTexId: Int, presentationTimeUs: Long) {
-        val output = useOutputTexture()
         try {
             program.use()
             program.setSamplerTexIdUniform("uTexSampler", inputTexId, /* texUnitIndex= */ 0)
             program.setFloatsUniform(
                 "uTexelSize",
-                floatArrayOf(1f / output.width, 1f / output.height),
+                floatArrayOf(1f / outputWidth, 1f / outputHeight),
             )
             program.setFloatUniform("uAmount", amount)
             program.setBufferAttribute("aFramePosition", FULLSCREEN_QUAD, /* size= */ 2)
             program.bindAttributesAndUniforms()
-            GlUtil.focusFramebufferUsingCurrentContext(output.fboId, output.width, output.height)
             GlUtil.clearFocusedBuffers()
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
             GlUtil.checkGlError()
         } catch (error: GlUtil.GlException) {
             throw VideoFrameProcessingException(error, presentationTimeUs)
         }
-        // 不在这里回收纹理：下游消费完会回调 releaseOutputFrame
-        getOutputListener().onOutputFrameAvailable(output, presentationTimeUs)
     }
 
     private companion object {
