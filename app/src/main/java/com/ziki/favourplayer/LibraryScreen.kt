@@ -1239,10 +1239,13 @@ private fun syncStatusText(state: LibraryUiState): String {
         syncedAt != null -> "已同步 ${formatSyncMoment(syncedAt)}"
         else -> "等待拉取"
     }
-    // 同步顺带带回来的字幕数量，>0 时才补一句，避免平时挤占这一行
-    val subtitles = state.subtitleSyncedCount
-    return if (state.subtitleSyncedAt != null && subtitles > 0) {
-        "$base · 字幕 $subtitles 部"
+    // 字幕这次动了多少：分开显示推上去的和拉下来的，方便确认到底通没通
+    val subtitles = buildList {
+        if (state.subtitlePushedCount > 0) add("推 ${state.subtitlePushedCount}")
+        if (state.subtitlePulledCount > 0) add("拉 ${state.subtitlePulledCount}")
+    }
+    return if (state.subtitleSyncedAt != null && subtitles.isNotEmpty()) {
+        "$base · 字幕 ${subtitles.joinToString(" ")}"
     } else {
         base
     }

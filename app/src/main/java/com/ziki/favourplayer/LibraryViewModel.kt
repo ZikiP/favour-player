@@ -29,8 +29,10 @@ data class LibraryUiState(
     val playback: Map<String, PlaybackProgress> = emptyMap(),
     /** 本机最近一次成功拉取的时刻（点同步成功就刷新，与数据是否变化无关） */
     val lastPulledAt: Long? = null,
-    /** 本次拉取顺带同步回来的字幕数量 */
-    val subtitleSyncedCount: Int = 0,
+    /** 这次同步推上去的字幕数 */
+    val subtitlePushedCount: Int = 0,
+    /** 这次同步从服务端拉下来的字幕数 */
+    val subtitlePulledCount: Int = 0,
     /** 字幕同步完成的时刻，用于界面区分「这次带回来多少」 */
     val subtitleSyncedAt: Long? = null,
 )
@@ -184,8 +186,8 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
                 }.getOrNull()
             } ?: return@launch
             state = state.copy(
-                // 推上去的和拉下来的都算「这次同步动了字幕」
-                subtitleSyncedCount = result.pushed + result.updated,
+                subtitlePushedCount = result.pushed,
+                subtitlePulledCount = result.updated,
                 subtitleSyncedAt = System.currentTimeMillis(),
             )
         }
