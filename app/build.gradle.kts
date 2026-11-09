@@ -92,6 +92,8 @@ dependencies {
     implementation("androidx.media3:media3-datasource:1.5.1")
     implementation("androidx.media3:media3-database:1.5.1")
     implementation("androidx.media3:media3-datasource-okhttp:1.5.1")
+    // 系统媒体控制（蓝牙/耳机按键、媒体输出面板）靠 MediaSession 接住
+    implementation("androidx.media3:media3-session:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

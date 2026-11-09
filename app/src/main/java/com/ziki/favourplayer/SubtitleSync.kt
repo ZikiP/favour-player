@@ -50,20 +50,38 @@ object SubtitleSync {
         return try {
             downloadClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return null
-                val root = runCatching { JSONObject(response.body?.string().orEmpty()) }
-                    .getOrNull() ?: return null
-                val style = root.optJSONObject("style")
-                    ?.takeIf { it.length() > 0 }
-                    ?.let { SubtitleStyleCodec.decode(it) }
-                SharedSubtitle(
-                    name = root.optString("name"),
-                    text = root.optString("text"),
-                    style = style,
-                )
+                parseSharedSubtitle(response.body?.string().orEmpty())
             }
         } catch (_: Exception) {
             null
         }
+    }
+
+    /** 把服务端返回的单条字幕 JSON 解出来；坏数据返回 null。 */
+    internal fun parseSharedSubtitle(raw: String): SharedSubtitle? {
+        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+        val style = root.optJSONObject("style")
+            ?.takeIf { it.length() > 0 }
+            ?.let { SubtitleStyleCodec.decode(it) }
+        return SharedSubtitle(
+            name = root.optString("name"),
+            text = root.optString("text"),
+            style = style,
+            updatedAt = root.optLong("updatedAt", 0L),
+            clientUpdatedAt = root.optLong("clientUpdatedAt", 0L),
+        )
+    }
+
+    /**
+     * 打开作品时决定要不要用服务端那份覆盖本地：
+     * 本地没改过（localAt<=0）就直接用；改过则只认更新的一方。
+     * 服务端带 clientUpdatedAt（写入方本机改动时间）时优先用它比较，
+     * 没有就退回服务端落盘时间。
+     */
+    internal fun shouldApplyRemote(localAt: Long, remote: SharedSubtitle): Boolean {
+        if (localAt <= 0L) return true
+        val remoteAt = if (remote.clientUpdatedAt > 0L) remote.clientUpdatedAt else remote.updatedAt
+        return remoteAt > localAt
     }
 
     /**
@@ -304,4 +322,8 @@ data class SharedSubtitle(
     val name: String,
     val text: String,
     val style: SubtitleStyle?,
+    /** 服务端落盘时间 */
+    val updatedAt: Long = 0L,
+    /** 写入方本机最后改动时间，比先后用 */
+    val clientUpdatedAt: Long = 0L,
 )

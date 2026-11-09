@@ -1,7 +1,9 @@
 package com.ziki.favourplayer
 
 import android.app.Activity
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.media.AudioManager
@@ -58,6 +60,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -68,6 +72,7 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.session.MediaSession
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.Dispatchers
@@ -134,9 +139,11 @@ fun PlayerScreen(
         if (config.url.isBlank() || config.token.isBlank()) return
         val style = subtitleStyle
         scope.launch(Dispatchers.IO) {
-            if (!SubtitleSync.upload(config, contentKey, name, text, style)) {
-                notifyUploadFailed()
-            }
+            val ok = SubtitleSync.upload(
+                config, contentKey, name, text, style,
+                subtitleStore.localAt(contentKey),
+            )
+            if (!ok) notifyUploadFailed()
         }
     }
 
@@ -150,6 +157,7 @@ fun PlayerScreen(
             val ok = SubtitleSync.upload(
                 config, contentKey,
                 local?.first.orEmpty(), local?.second.orEmpty(), style,
+                subtitleStore.localAt(contentKey),
             )
             if (!ok) notifyUploadFailed()
         }
@@ -237,6 +245,22 @@ fun PlayerScreen(
     val trackSelector = remember { DefaultTrackSelector(context) }
     val player = remember(stream.masterUrl) {
         buildPlayer(context, stream, playerPrefs.sharpen, trackSelector, playerPrefs.qualityFirst)
+    }
+    // 系统媒体控制：蓝牙/耳机按键、媒体输出面板都经由这个会话操作播放器。
+    // 会话生命周期跟随播放器（Activity 存活期间），点面板回到播放页
+    DisposableEffect(player, contentKey) {
+        val session = MediaSession.Builder(context, player)
+            .setSessionActivity(
+                PendingIntent.getActivity(
+                    context,
+                    0,
+                    Intent(context, PlayerActivity::class.java)
+                        .putExtra(PlayerActivity.EXTRA_PAGE_URL, contentKey),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                ),
+            )
+            .build()
+        onDispose { session.release() }
     }
     // 用户手动挑过画质之后，就以用户的选择为准，不再被画质优先顶回来
     var userPickedQuality by remember { mutableStateOf(false) }
@@ -429,12 +453,16 @@ fun PlayerScreen(
         // 先读本地已有字幕：离线/无网也能立即显示，不依赖中间服务
         loadLocalSubtitle()
 
-        // 再拉共享字幕：远端优先，拉到就覆盖本地（正文 + 整份样式）
+        // 再拉共享字幕：本机没改过就整体采用；改过则只认更新的那份
+        // （旧设备离线时改了偏移，联网后不能被服务端旧数据顶掉）
         val config = SyncStore(context).loadPullConfig()
         if (config.url.isBlank() || config.token.isBlank()) return@LaunchedEffect
         if (CleanMode.enabled) return@LaunchedEffect
         val remote = withContext(Dispatchers.IO) { SubtitleSync.download(config, contentKey) }
             ?: return@LaunchedEffect
+        if (!SubtitleSync.shouldApplyRemote(subtitleStore.localAt(contentKey), remote)) {
+            return@LaunchedEffect
+        }
         if (remote.text.isNotBlank()) {
             val cues = withContext(Dispatchers.IO) { SubtitleParser.parse(remote.text) }
             if (cues.isNotEmpty()) {
@@ -446,6 +474,11 @@ fun PlayerScreen(
             subtitleStyle = style
             subtitleStyleStore.save(contentKey, style)
         }
+        // 用服务端记的时间对齐本地，避免把刚拉下来的当成自己改的又推回服务端
+        if (remote.clientUpdatedAt > 0L) {
+            subtitleStore.markLocalAt(contentKey, remote.clientUpdatedAt)
+        }
+        if (remote.updatedAt > 0L) subtitleStore.saveSharedAt(contentKey, remote.updatedAt)
     }
 
     var controlsVisible by remember { mutableStateOf(true) }
@@ -925,6 +958,16 @@ private fun buildPlayer(
 
     return ExoPlayer.Builder(context)
         .setTrackSelector(trackSelector)
+        // 声明成影视类媒体并自己处理音频焦点：来电/别的 App 出声时自动让位，
+        // 拔耳机（becoming noisy）时自动暂停
+        .setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                .build(),
+            /* handleAudioFocus = */ true,
+        )
+        .setHandleAudioBecomingNoisy(true)
         .build()
         .apply {
             // 特效链必须在 prepare() 之前建立，之后改只能换效果、不能新建管线

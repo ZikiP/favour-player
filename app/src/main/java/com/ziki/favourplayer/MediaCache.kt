@@ -25,7 +25,22 @@ object MediaCache {
         return CacheDataSource.Factory()
             .setCache(simpleCache)
             .setUpstreamDataSourceFactory(upstream)
+            // 不带签名参数做键：同一分片每次拿到的 URL 签名都不同，
+            // 用整条 URL 做键等于永远命中不了缓存
+            .setCacheKeyFactory { dataSpec -> cacheKeyOf(dataSpec.uri.toString()) }
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+    }
+
+    /**
+     * 缓存键：去掉查询串和片段。
+     *
+     * 分片地址通常形如 /hls/seg-3.ts?sign=…&expires=…，签名每次播放都会换；
+     * 按路径做键，同一段视频第二遍播放/拖动才能命中缓存。
+     * 代价是查询串决定内容的站点（极少见）会共用一份缓存。
+     */
+    internal fun cacheKeyOf(rawUrl: String): String {
+        val cut = rawUrl.indexOfFirst { it == '?' || it == '#' }
+        return if (cut >= 0) rawUrl.substring(0, cut) else rawUrl
     }
 
     /**

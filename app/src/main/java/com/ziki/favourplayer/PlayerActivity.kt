@@ -50,6 +50,10 @@ class PlayerActivity : ComponentActivity() {
     /** 播放器状态快照，用来算画中画比例和系统按钮图标。 */
     private var playback by mutableStateOf(PipPlayback())
 
+    /** 当前播放的作品地址；从扩展/媒体面板再次打开时原地换片，不重开窗口。 */
+    private var pageUrl by mutableStateOf("")
+    private var fromStart by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -58,14 +62,15 @@ class PlayerActivity : ComponentActivity() {
 
         PipBridge.closeAction = { finish() }
 
-        val pageUrl = urlFromIntent(intent).orEmpty()
-        val fromStart = intent.getBooleanExtra(EXTRA_FROM_START, false)
+        pageUrl = urlFromIntent(intent).orEmpty()
+        fromStart = intent.getBooleanExtra(EXTRA_FROM_START, false)
 
         setContent {
             FavourPlayerTheme {
                 var state by remember { mutableStateOf<UiState>(UiState.Loading) }
 
                 LaunchedEffect(pageUrl) {
+                    state = UiState.Loading
                     if (pageUrl.isBlank()) {
                         state = UiState.Failed("没有收到播放地址")
                         return@LaunchedEffect
@@ -104,6 +109,15 @@ class PlayerActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val next = urlFromIntent(intent).orEmpty()
+        if (next == pageUrl) return
+        fromStart = intent.getBooleanExtra(EXTRA_FROM_START, false)
+        pageUrl = next
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
